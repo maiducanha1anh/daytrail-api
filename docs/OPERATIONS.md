@@ -24,6 +24,7 @@ Kết quả mong đợi: `db:verify` ghi/đọc/xóa đúng một document tạm
 Khi khởi động, backend tạo hoặc kiểm tra:
 
 - Unique index: chỉ mục bảo đảm email và hash token không bị trùng.
+- Task index: chỉ mục ghép `userId`, `date`, `startTime`, `_id` phục vụ truy vấn theo chủ sở hữu/ngày và sắp xếp ổn định.
 - TTL index: chỉ mục giúp MongoDB dọn session hết hạn; API vẫn tự kiểm tra `expiresAt` ở mỗi request.
 - Graceful shutdown: quy trình đóng HTTP server rồi đóng Mongoose khi nhận `SIGINT` hoặc `SIGTERM`, với timeout 10 giây.
 
@@ -35,6 +36,14 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 - `POST /api/auth/login`: tạo session và cookie `HttpOnly`.
 - `GET /api/auth/me`: đọc user của session hiện tại.
 - `POST /api/auth/logout`: thu hồi session và xóa cookie; gọi lặp lại vẫn an toàn.
+- `POST /api/tasks`: tạo công việc một lần.
+- `GET /api/tasks`: danh sách theo một ngày hoặc khoảng ngày có phân trang.
+- `GET /api/tasks/summary`: tổng quan một ngày.
+- `GET/PATCH/DELETE /api/tasks/:id`: đọc, sửa và xóa công việc thuộc user hiện tại.
+- `PATCH /api/tasks/:id/date`: chuyển ngày mà không reset nội dung/trạng thái.
+- `PATCH /api/tasks/:id/completion`: đặt rõ `completed=true/false`.
+
+Mọi endpoint công việc yêu cầu session. Các thao tác ghi yêu cầu JSON và Origin hợp lệ; mọi truy vấn/sửa/xóa đều kèm `userId` lấy từ session.
 
 ## Database kiểm thử
 
@@ -42,7 +51,7 @@ Integration test là kiểm thử nhiều thành phần cùng lúc: route, middl
 
 - Test chỉ chấp nhận `MONGODB_TEST_URI` có pathname `/daytrail_test`; không fallback sang `MONGODB_URI`.
 - Database user test chỉ cần `readWrite` trên `daytrail_test`.
-- Test không drop database hoặc collection. Mỗi lần chạy dùng domain email ngẫu nhiên rồi chỉ xóa user của lần đó và session theo đúng `userId`.
+- Test không drop database hoặc collection. Mỗi lần chạy dùng domain email ngẫu nhiên rồi chỉ xóa task, session và user của lần đó theo đúng `userId`.
 
 Mở PowerShell tại backend và chạy:
 
@@ -51,13 +60,20 @@ cd C:\daytrail-api
 npm test
 ```
 
-Kết quả mong đợi: 8 test PASS. Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Kết quả mong đợi hiện tại: 17 test PASS (8 auth, 9 công việc). Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
 - Người dùng chạy `npm test` trên database thực tế `daytrail_test`: 8 PASS, 0 fail/cancelled/skipped/todo.
 - Codex kiểm tra session qua hai tiến trình backend riêng: cookie tạo ở tiến trình đầu vẫn dùng được sau khi khởi động tiến trình thứ hai.
 - Codex kiểm tra cleanup: không còn user mang marker của bộ test; phép kiểm chứng restart còn 0 user và 0 session tạm.
+- Chặng 2A: Codex chạy toàn bộ 17 test trên `daytrail_test`; cleanup của test công việc xác nhận còn 0 task, 0 session và 0 user thuộc run.
+
+## Giới hạn chặng 2A
+
+- Chỉ hỗ trợ công việc một lần; `repeat` chỉ nhận `none`.
+- Chưa có công việc lặp, ảnh, nhật ký ngày hoặc frontend công việc.
+- Ngày được lưu dưới dạng lịch địa phương `YYYY-MM-DD`, không đổi sang UTC. Giờ bắt đầu/kết thúc phải cùng ngày và `endTime` phải sau `startTime`.
 
 ## Bảo mật phiên đăng nhập
 

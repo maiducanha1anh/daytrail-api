@@ -9,7 +9,7 @@ import { hashSessionToken, SESSION_COOKIE_NAME } from '../auth/session.js'
 import { createApp } from '../app.js'
 import { loadTestConfig } from '../config/env.js'
 import { connectDatabase, disconnectDatabase, pingDatabase } from '../database/mongoose.js'
-import { ensureAuthIndexes } from '../models/indexes.js'
+import { ensureDatabaseIndexes } from '../models/indexes.js'
 import { Session } from '../models/Session.js'
 import { User } from '../models/User.js'
 
@@ -70,7 +70,7 @@ before(async () => {
     uri: config.mongodbUri,
   })
   assert.equal(mongoose.connection.name, 'daytrail_test')
-  await ensureAuthIndexes()
+  await ensureDatabaseIndexes()
   app = createTestApp()
 })
 

@@ -2,6 +2,7 @@ import cors from 'cors'
 import express from 'express'
 import cookieParser from 'cookie-parser'
 import { createAuthRouter } from './routes/auth.js'
+import { createTaskRouter } from './routes/tasks.js'
 
 type AppDependencies = {
   authRateLimitMax: number
@@ -32,6 +33,7 @@ export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecur
     rateLimitWindowMs: authRateLimitWindowMs,
     sessionTtlMs,
   }))
+  app.use('/api/tasks', createTaskRouter({ frontendOrigin }))
   app.use((error: unknown, _request: express.Request, response: express.Response, next: express.NextFunction) => {
     void next
     if (error instanceof SyntaxError && 'status' in error && error.status === 400) {

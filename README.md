@@ -1,6 +1,6 @@
 # DayTrail API
 
-Backend Express + TypeScript của DayTrail. Chặng 1B.1 đã hoàn thành phần đăng ký, đăng nhập và phiên đăng nhập lưu trong MongoDB. Giao diện xác thực và các tính năng nghiệp vụ chưa được triển khai.
+Backend Express + TypeScript của DayTrail. Phần tài khoản và phiên đã hoàn thành; chặng 2A bổ sung API quản lý công việc một lần theo ngày. Công việc lặp, ảnh, nhật ký ngày và frontend công việc chưa được triển khai.
 
 ## Chuẩn bị trên Windows
 
@@ -60,7 +60,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` chạy trên `daytrail_test`. Theo kết quả người dùng cung cấp khi nghiệm thu chặng 1B.1: 8 test PASS, 0 test lỗi hoặc bị bỏ qua.
+- `npm test` chạy trên `daytrail_test`. Kết quả Codex kiểm tra ở chặng 2A: 17 test PASS, gồm 8 test auth và 9 test công việc.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
@@ -88,6 +88,29 @@ Invoke-WebRequest -Method Post -Uri http://localhost:4000/api/auth/logout -Conte
 
 Kết quả mong đợi: đăng ký trả HTTP 201, đăng nhập và `/me` trả HTTP 200, đăng xuất trả HTTP 204. Chi tiết request, response và mã lỗi nằm trong [hợp đồng API](C:\daytrail-web\docs\API_CONTRACT.md).
 
+## Thử API công việc
+
+Đăng nhập trước để có `$DayTrailSession` như ví dụ trên. Sau đó chạy trong cùng cửa sổ PowerShell:
+
+```powershell
+$taskBody = @{
+  date = '2026-10-04'
+  name = 'Lập kế hoạch ngày'
+  startTime = '09:00'
+  endTime = '10:00'
+  priority = 'normal'
+  repeat = 'none'
+} | ConvertTo-Json
+
+$created = Invoke-RestMethod -Method Post -Uri http://localhost:4000/api/tasks -ContentType 'application/json' -Body $taskBody -WebSession $DayTrailSession
+Invoke-RestMethod -Uri 'http://localhost:4000/api/tasks?date=2026-10-04' -WebSession $DayTrailSession
+
+$completion = @{ completed = $true } | ConvertTo-Json
+Invoke-RestMethod -Method Patch -Uri "http://localhost:4000/api/tasks/$($created.task.id)/completion" -ContentType 'application/json' -Body $completion -WebSession $DayTrailSession
+```
+
+Kết quả mong đợi: tạo trả HTTP 201; danh sách và cập nhật hoàn thành trả HTTP 200. Nếu nhận 401, đăng nhập lại; nếu nhận 400, đối chiếu ngày `YYYY-MM-DD`, giờ `HH:mm` và [hợp đồng API](C:\daytrail-web\docs\API_CONTRACT.md).
+
 ## Chạy cùng frontend
 
 Giữ backend chạy và mở terminal PowerShell thứ hai:
@@ -97,4 +120,4 @@ cd C:\daytrail-web
 npm run dev
 ```
 
-Mở `http://localhost:5173`. Frontend hiện chỉ kiểm tra kết nối backend; giao diện đăng ký/đăng nhập chưa được làm.
+Mở `http://localhost:5173`. Giao diện tài khoản đã có; frontend công việc chưa được làm trong chặng 2A.

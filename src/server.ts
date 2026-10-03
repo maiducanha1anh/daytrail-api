@@ -2,7 +2,7 @@ import type { Server } from 'node:http'
 import { createApp } from './app.js'
 import { ConfigurationError, loadConfig } from './config/env.js'
 import { connectDatabase, DatabaseConnectionError, disconnectDatabase, pingDatabase } from './database/mongoose.js'
-import { ensureAuthIndexes } from './models/indexes.js'
+import { ensureDatabaseIndexes } from './models/indexes.js'
 
 let server: Server | undefined
 let shuttingDown = false
@@ -33,7 +33,7 @@ async function start() {
     pingTimeoutMs: config.mongodbPingTimeoutMs,
     uri: config.mongodbUri,
   })
-  await ensureAuthIndexes()
+  await ensureDatabaseIndexes()
   const app = createApp({
     authRateLimitMax: config.authRateLimitMax,
     authRateLimitWindowMs: config.authRateLimitWindowMs,
