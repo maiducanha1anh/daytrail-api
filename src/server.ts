@@ -2,6 +2,7 @@ import type { Server } from 'node:http'
 import { createApp } from './app.js'
 import { ConfigurationError, loadConfig } from './config/env.js'
 import { connectDatabase, DatabaseConnectionError, disconnectDatabase, pingDatabase } from './database/mongoose.js'
+import { ensureAuthIndexes } from './models/indexes.js'
 
 let server: Server | undefined
 let shuttingDown = false
@@ -26,10 +27,20 @@ async function shutdown(signal: NodeJS.Signals) {
 
 async function start() {
   const config = loadConfig()
-  await connectDatabase(config.mongodbUri, config.mongodbConnectTimeoutMs, config.mongodbPingTimeoutMs)
+  await connectDatabase({
+    connectTimeoutMs: config.mongodbConnectTimeoutMs,
+    databaseName: config.databaseName,
+    pingTimeoutMs: config.mongodbPingTimeoutMs,
+    uri: config.mongodbUri,
+  })
+  await ensureAuthIndexes()
   const app = createApp({
+    authRateLimitMax: config.authRateLimitMax,
+    authRateLimitWindowMs: config.authRateLimitWindowMs,
+    cookieSecure: config.cookieSecure,
     frontendOrigin: config.frontendOrigin,
     isDatabaseReady: () => pingDatabase(config.mongodbPingTimeoutMs),
+    sessionTtlMs: config.sessionTtlMs,
   })
   server = app.listen(config.port, () => console.log(`DayTrail API listening on http://localhost:${config.port}`))
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {

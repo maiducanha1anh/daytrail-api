@@ -1,6 +1,11 @@
 import mongoose from 'mongoose'
 
-const DATABASE_NAME = 'daytrail'
+type DatabaseConnectionOptions = {
+  connectTimeoutMs: number
+  databaseName: string
+  pingTimeoutMs: number
+  uri: string
+}
 
 export class DatabaseConnectionError extends Error {
   override name = 'DatabaseConnectionError'
@@ -39,17 +44,17 @@ function withTimeout<T>(operation: Promise<T>, timeoutMs: number) {
   })
 }
 
-export async function connectDatabase(uri: string, connectTimeoutMs: number, pingTimeoutMs: number) {
+export async function connectDatabase({ uri, databaseName, connectTimeoutMs, pingTimeoutMs }: DatabaseConnectionOptions) {
   try {
     await mongoose.connect(uri, {
       connectTimeoutMS: connectTimeoutMs,
-      dbName: DATABASE_NAME,
+      dbName: databaseName,
       serverSelectionTimeoutMS: connectTimeoutMs,
     })
   } catch (error: unknown) {
     throw new DatabaseConnectionError(`MongoDB connection failed (${safeConnectionFailure(error)})`)
   }
-  if (mongoose.connection.name !== DATABASE_NAME) {
+  if (mongoose.connection.name !== databaseName) {
     await mongoose.disconnect()
     throw new DatabaseConnectionError('MongoDB connected to an unexpected database')
   }
@@ -57,7 +62,7 @@ export async function connectDatabase(uri: string, connectTimeoutMs: number, pin
     await mongoose.disconnect()
     throw new DatabaseConnectionError('MongoDB ping failed')
   }
-  console.log(`MongoDB connected and ready (database: ${DATABASE_NAME})`)
+  console.log(`MongoDB connected and ready (database: ${databaseName})`)
 }
 
 export async function pingDatabase(timeoutMs: number) {

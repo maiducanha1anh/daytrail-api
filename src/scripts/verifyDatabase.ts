@@ -7,7 +7,12 @@ const documentId = `stage-1a-${randomUUID()}`
 
 async function verify() {
   const config = loadConfig()
-  await connectDatabase(config.mongodbUri, config.mongodbConnectTimeoutMs, config.mongodbPingTimeoutMs)
+  await connectDatabase({
+    connectTimeoutMs: config.mongodbConnectTimeoutMs,
+    databaseName: config.databaseName,
+    pingTimeoutMs: config.mongodbPingTimeoutMs,
+    uri: config.mongodbUri,
+  })
   const collection = databaseConnection().collection<{ _id: string; createdAt: Date; purpose: string }>(collectionName)
   let inserted = false
   try {
