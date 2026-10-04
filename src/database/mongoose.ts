@@ -11,7 +11,7 @@ export class DatabaseConnectionError extends Error {
   override name = 'DatabaseConnectionError'
 }
 
-function safeConnectionFailure(error: unknown) {
+export function safeDatabaseFailureCode(error: unknown) {
   const fallback = error instanceof Error ? error.name : 'UnknownError'
   if (!error || typeof error !== 'object') return fallback
   const directCode = 'code' in error && (typeof error.code === 'string' || typeof error.code === 'number') ? error.code : undefined
@@ -33,6 +33,15 @@ function safeConnectionFailure(error: unknown) {
   return fallback
 }
 
+export function isDatabaseUnavailableError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const name = 'name' in error && typeof error.name === 'string' ? error.name : ''
+  if (['MongooseServerSelectionError', 'MongoServerSelectionError', 'MongoNetworkError', 'MongoNetworkTimeoutError'].includes(name)) return true
+  if ((name === 'MongooseError' || name.startsWith('Mongo')) && mongoose.connection.readyState !== 1) return true
+  const reason = 'reason' in error && error.reason && typeof error.reason === 'object' ? error.reason : undefined
+  return Boolean(reason && 'servers' in reason && reason.servers instanceof Map)
+}
+
 function withTimeout<T>(operation: Promise<T>, timeoutMs: number) {
   let timer: NodeJS.Timeout | undefined
   const timeout = new Promise<never>((_resolve, reject) => {
@@ -50,9 +59,10 @@ export async function connectDatabase({ uri, databaseName, connectTimeoutMs, pin
       connectTimeoutMS: connectTimeoutMs,
       dbName: databaseName,
       serverSelectionTimeoutMS: connectTimeoutMs,
+      socketTimeoutMS: connectTimeoutMs,
     })
   } catch (error: unknown) {
-    throw new DatabaseConnectionError(`MongoDB connection failed (${safeConnectionFailure(error)})`)
+    throw new DatabaseConnectionError(`MongoDB connection failed (${safeDatabaseFailureCode(error)})`)
   }
   if (mongoose.connection.name !== databaseName) {
     await mongoose.disconnect()

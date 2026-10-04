@@ -3,6 +3,7 @@ import express from 'express'
 import cookieParser from 'cookie-parser'
 import { createAuthRouter } from './routes/auth.js'
 import { createTaskRouter } from './routes/tasks.js'
+import { isDatabaseUnavailableError, safeDatabaseFailureCode } from './database/mongoose.js'
 
 type AppDependencies = {
   authRateLimitMax: number
@@ -38,6 +39,14 @@ export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecur
     void next
     if (error instanceof SyntaxError && 'status' in error && error.status === 400) {
       response.status(400).json({ error: 'JSON không hợp lệ.' })
+      return
+    }
+    if (isDatabaseUnavailableError(error)) {
+      console.error(`Request failed (DatabaseUnavailable:${safeDatabaseFailureCode(error)})`)
+      response.set('Retry-After', '5').status(503).json({
+        code: 'DATABASE_UNAVAILABLE',
+        error: 'Dữ liệu tạm thời không sẵn sàng. Vui lòng thử lại sau.',
+      })
       return
     }
     console.error(`Request failed (${error instanceof Error ? error.name : 'UnknownError'})`)

@@ -1,6 +1,6 @@
 # DayTrail API
 
-Backend Express + TypeScript của DayTrail. Phần tài khoản và phiên đã hoàn thành; chặng 2A bổ sung API quản lý công việc một lần theo ngày. Công việc lặp, ảnh, nhật ký ngày và frontend công việc chưa được triển khai.
+Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên và API công việc một lần theo ngày đã hoàn thành. Frontend chặng 2B đã dùng các API này cho Hôm nay và Lịch; công việc lặp, ảnh và nhật ký ngày chưa được triển khai.
 
 ## Chuẩn bị trên Windows
 
@@ -60,7 +60,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` chạy trên `daytrail_test`. Kết quả Codex kiểm tra ở chặng 2A: 17 test PASS, gồm 8 test auth và 9 test công việc.
+- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 18 test: 8 auth, 9 công việc và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex đã chạy lại sau khi Atlas phục hồi: 18 PASS, 0 fail; dữ liệu có marker test còn lại bằng 0.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
@@ -70,7 +70,7 @@ Invoke-RestMethod http://localhost:4000/api/health
 Invoke-RestMethod http://localhost:4000/api/ready
 ```
 
-`/api/health` phải trả `status=ok`; `/api/ready` phải trả `status=ready`. Nếu lỗi, xem [hướng dẫn vận hành](docs/OPERATIONS.md) và không đưa URI hoặc mật khẩu vào log chia sẻ.
+`/api/health` phải trả `status=ok` và chỉ xác nhận tiến trình API còn sống; `/api/ready` phải trả `status=ready` mới xác nhận MongoDB hoạt động. Nếu lỗi, xem [hướng dẫn vận hành](docs/OPERATIONS.md) và không đưa URI hoặc mật khẩu vào log chia sẻ.
 
 ## Thử API xác thực
 
@@ -120,4 +120,4 @@ cd C:\daytrail-web
 npm run dev
 ```
 
-Mở `http://localhost:5173`. Giao diện tài khoản đã có; frontend công việc chưa được làm trong chặng 2A.
+Mở `http://localhost:5173`. Giao diện tài khoản, danh sách Hôm nay và lập kế hoạch cơ bản trong Lịch đã có; nhật ký, ảnh và lịch lặp vẫn chưa triển khai.

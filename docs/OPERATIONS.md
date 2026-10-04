@@ -45,6 +45,8 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 
 Mọi endpoint công việc yêu cầu session. Các thao tác ghi yêu cầu JSON và Origin hợp lệ; mọi truy vấn/sửa/xóa đều kèm `userId` lấy từ session.
 
+Nếu MongoDB mất kết nối sau khi API đã mở cổng, endpoint cần database trả HTTP 503 với `code="DATABASE_UNAVAILABLE"` và `Retry-After: 5`. Đây là lỗi dịch vụ, không phải phiên hết hạn: backend không trả 401 và không xóa cookie. `/api/health` chỉ xác nhận tiến trình Express còn sống; luôn dùng `/api/ready` để kết luận database có sẵn sàng hay không.
+
 ## Database kiểm thử
 
 Integration test là kiểm thử nhiều thành phần cùng lúc: route, middleware, MongoDB và cookie.
@@ -60,7 +62,7 @@ cd C:\daytrail-api
 npm test
 ```
 
-Kết quả mong đợi hiện tại: 17 test PASS (8 auth, 9 công việc). Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Bộ test hiện có 18 test (8 auth, 9 công việc, 1 lỗi database). Kết quả mong đợi là 18 PASS. Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
@@ -68,11 +70,12 @@ Kết quả nghiệm thu:
 - Codex kiểm tra session qua hai tiến trình backend riêng: cookie tạo ở tiến trình đầu vẫn dùng được sau khi khởi động tiến trình thứ hai.
 - Codex kiểm tra cleanup: không còn user mang marker của bộ test; phép kiểm chứng restart còn 0 user và 0 session tạm.
 - Chặng 2A: Codex chạy toàn bộ 17 test trên `daytrail_test`; cleanup của test công việc xác nhận còn 0 task, 0 session và 0 user thuộc run.
+- Nghiệm thu chặng 2B: sau khi người dùng thêm IP công cộng hiện tại vào Atlas IP Access List với trạng thái Active, Codex chạy lại 18/18 test PASS. Kiểm tra sau cleanup xác nhận còn 0 user, session và task mang marker test.
 
 ## Giới hạn chặng 2A
 
 - Chỉ hỗ trợ công việc một lần; `repeat` chỉ nhận `none`.
-- Chưa có công việc lặp, ảnh, nhật ký ngày hoặc frontend công việc.
+- Chưa có công việc lặp, ảnh hoặc nhật ký ngày. Frontend Hôm nay và Lịch cơ bản thuộc chặng 2B đã được kiểm chứng riêng trên `daytrail_test`.
 - Ngày được lưu dưới dạng lịch địa phương `YYYY-MM-DD`, không đổi sang UTC. Giờ bắt đầu/kết thúc phải cùng ngày và `endTime` phải sau `startTime`.
 
 ## Bảo mật phiên đăng nhập
@@ -93,5 +96,7 @@ Kết quả nghiệm thu:
 | Server selection timeout | Kiểm tra Atlas IP Access List, trạng thái cluster và hostname. |
 | Authentication failed | Kiểm tra database user, quyền, mật khẩu và URL-encode ký tự đặc biệt; không gửi URI thật khi nhờ hỗ trợ. |
 | `/api/ready` trả 503 | Xem log backend đã che bí mật và kiểm tra kết nối Atlas; `/api/health` vẫn có thể trả 200. |
+| `ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR` trên mọi node Atlas | Kiểm tra IP công cộng hiện tại có đúng một entry `/32` trạng thái Active trong Atlas **Security → Network Access**. Không dùng `0.0.0.0/0`. Nếu IP đã đúng, kiểm tra VPN/proxy/antivirus có can thiệp TLS và thử lại từ mạng tin cậy. |
+| `/api/auth/me` trả 500 rồi mọi request bị `ERR_CONNECTION_REFUSED` | Lỗi 500 xảy ra khi server cũ còn chạy nhưng truy vấn MongoDB thất bại. Sau một lần reload/restart, backend không mở cổng nếu connect/ping startup thất bại, nên trình duyệt nhận connection refused. Khôi phục Atlas trước rồi khởi động lại backend. |
 
 Không cần preload `dns.setServers`, hardcode DNS, tắt TLS hoặc tắt kiểm tra chứng chỉ trong source.
