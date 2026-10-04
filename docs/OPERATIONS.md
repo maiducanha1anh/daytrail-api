@@ -25,6 +25,7 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 
 - Unique index: chỉ mục bảo đảm email và hash token không bị trùng.
 - Task index: chỉ mục ghép `userId`, `date`, `startTime`, `_id` phục vụ truy vấn theo chủ sở hữu/ngày và sắp xếp ổn định.
+- Recurrence indexes: chỉ mục chuỗi theo chủ sở hữu/ngày kết thúc và unique index `(userId, seriesId, originalDate)` chống tạo trùng lần thực hiện.
 - TTL index: chỉ mục giúp MongoDB dọn session hết hạn; API vẫn tự kiểm tra `expiresAt` ở mỗi request.
 - Graceful shutdown: quy trình đóng HTTP server rồi đóng Mongoose khi nhận `SIGINT` hoặc `SIGTERM`, với timeout 10 giây.
 
@@ -40,6 +41,8 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 - `GET /api/tasks`: danh sách theo một ngày hoặc khoảng ngày có phân trang.
 - `GET /api/tasks/summary`: tổng quan một ngày.
 - `GET /api/tasks/summaries`: tổng quan theo từng ngày trong khoảng tối đa 366 ngày; không trả nội dung/note.
+- `POST /api/tasks/series`: tạo cấu hình chuỗi và các lần thực hiện hữu hạn trong một transaction.
+- `POST /api/tasks/series/:seriesId/stop`: dừng chuỗi từ ngày dự kiến, giữ lịch sử có note/đã hoàn thành.
 - `GET/PATCH/DELETE /api/tasks/:id`: đọc, sửa và xóa công việc thuộc user hiện tại.
 - `PATCH /api/tasks/:id/date`: chuyển ngày mà không reset nội dung/trạng thái.
 - `PATCH /api/tasks/:id/completion`: đặt rõ `completed=true/false`.
@@ -54,7 +57,7 @@ Integration test là kiểm thử nhiều thành phần cùng lúc: route, middl
 
 - Test chỉ chấp nhận `MONGODB_TEST_URI` có pathname `/daytrail_test`; không fallback sang `MONGODB_URI`.
 - Database user test chỉ cần `readWrite` trên `daytrail_test`.
-- Test không drop database hoặc collection. Mỗi lần chạy dùng domain email ngẫu nhiên rồi chỉ xóa task, session và user của lần đó theo đúng `userId`.
+- Test không drop database hoặc collection. Mỗi lần chạy dùng domain email ngẫu nhiên rồi chỉ xóa task, chuỗi lặp, session và user của lần đó theo đúng `userId`.
 
 Mở PowerShell tại backend và chạy:
 
@@ -63,7 +66,7 @@ cd C:\daytrail-api
 npm test
 ```
 
-Bộ test hiện có 19 test (8 auth, 10 công việc, 1 lỗi database). Kết quả mong đợi là 19 PASS. Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Bộ test hiện có 29 test (8 auth, 10 công việc, 10 công việc lặp, 1 lỗi database). Kết quả mong đợi là 29 PASS. Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
@@ -73,12 +76,20 @@ Kết quả nghiệm thu:
 - Chặng 2A: Codex chạy toàn bộ 17 test trên `daytrail_test`; cleanup của test công việc xác nhận còn 0 task, 0 session và 0 user thuộc run.
 - Nghiệm thu chặng 2B: sau khi người dùng thêm IP công cộng hiện tại vào Atlas IP Access List với trạng thái Active, Codex chạy lại 18/18 test PASS. Kiểm tra sau cleanup xác nhận còn 0 user, session và task mang marker test.
 - Kiểm chứng chặng 3A: Codex chạy 19/19 test PASS trên `daytrail_test`. Test tổng quan khoảng xác nhận cách ly tài khoản, ngày trống, giới hạn 366 ngày và tổng số đúng với 105 công việc — nhiều hơn một trang API.
+- Kiểm chứng chặng 3B.1: Codex chạy 29/29 test PASS trên `daytrail_test`. Suite recurrence kiểm tra ngày/tuần/tháng, 29/30/31, năm nhuận, giao năm, giới hạn 366 ngày, độc lập từng lần, dừng chuỗi, cách ly tài khoản, không đếm đôi và rollback transaction.
 
 ## Giới hạn công việc hiện tại
 
-- Chỉ hỗ trợ công việc một lần; `repeat` chỉ nhận `none`.
-- Chưa có công việc lặp, ảnh hoặc nhật ký ngày. Frontend Hôm nay và bốn chế độ Lịch của chặng 3A đã được kiểm chứng riêng trên `daytrail_test`.
+- API một lần `POST /api/tasks` vẫn chỉ nhận `repeat="none"`; chuỗi lặp dùng endpoint `/api/tasks/series` riêng.
+- Chuỗi chỉ hỗ trợ `daily`, `weekly`, `monthly`, bắt buộc ngày kết thúc và tối đa 366 ngày. Tháng thiếu ngày tương ứng sẽ được bỏ qua.
+- Chưa có giao diện tạo/dừng chuỗi, sửa hàng loạt quy tắc, ảnh hoặc nhật ký ngày. Frontend Hôm nay và bốn chế độ Lịch vẫn đọc các lần thực hiện như công việc bình thường.
 - Ngày được lưu dưới dạng lịch địa phương `YYYY-MM-DD`, không đổi sang UTC. Giờ bắt đầu/kết thúc phải cùng ngày và `endTime` phải sau `startTime`.
+
+## Transaction của chuỗi lặp
+
+Tạo chuỗi ghi `TaskSeries` và toàn bộ `Task` trong cùng MongoDB transaction: nếu một lần chèn thất bại, cả chuỗi và các lần đã chèn đều rollback. Unique partial index theo chuỗi/ngày dự kiến là lớp bảo vệ thứ hai chống trùng. Đọc lịch hoặc khởi động lại backend không sinh thêm dữ liệu.
+
+Dừng chuỗi cũng dùng transaction. Backend cập nhật `stoppedFromDate` và xóa các lần đủ điều kiện trong cùng một lần ghi nhất quán. Việc lọc dùng `originalDate`, nên công việc đã chuyển ngày vẫn thuộc đúng vị trí lịch gốc khi dừng.
 
 ## Bảo mật phiên đăng nhập
 

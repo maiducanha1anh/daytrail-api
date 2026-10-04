@@ -1,6 +1,6 @@
 # DayTrail API
 
-Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên và API công việc một lần theo ngày đã hoàn thành. Chặng 3A bổ sung tổng quan công việc theo khoảng ngày cho bốn chế độ Lịch; công việc lặp, ảnh và nhật ký ngày chưa được triển khai.
+Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên, công việc theo ngày và tổng quan Lịch đã hoàn thành. Chặng 3B.1 bổ sung chuỗi công việc lặp hữu hạn; giao diện lặp, ảnh và nhật ký ngày chưa được triển khai.
 
 ## Chuẩn bị trên Windows
 
@@ -60,7 +60,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 19 test: 8 auth, 10 công việc và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex chạy trong chặng 3A: 19 PASS, 0 fail/cancelled/skipped/todo.
+- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 29 test: 8 auth, 10 công việc, 10 công việc lặp và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex chạy trong chặng 3B.1: 29 PASS, 0 fail/cancelled/skipped/todo.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
@@ -112,6 +112,30 @@ Invoke-RestMethod -Method Patch -Uri "http://localhost:4000/api/tasks/$($created
 
 Kết quả mong đợi: tạo trả HTTP 201; danh sách, tổng quan khoảng và cập nhật hoàn thành trả HTTP 200. Tổng quan khoảng chỉ trả số liệu theo ngày, không trả note. Nếu nhận 401, đăng nhập lại; nếu nhận 400, đối chiếu ngày `YYYY-MM-DD`, giờ `HH:mm` và [hợp đồng API](C:\daytrail-web\docs\API_CONTRACT.md).
 
+## Thử API công việc lặp
+
+Đăng nhập trước để có `$DayTrailSession`, sau đó tạo chuỗi hằng tuần hữu hạn:
+
+```powershell
+$seriesBody = @{
+  date = '2026-10-05'
+  name = 'Tập thể dục'
+  startTime = '06:30'
+  endTime = '07:00'
+  repeat = @{
+    frequency = 'weekly'
+    weekdays = @(1, 3, 5)
+    endDate = '2026-12-31'
+  }
+} | ConvertTo-Json -Depth 3
+
+$series = Invoke-RestMethod -Method Post -Uri http://localhost:4000/api/tasks/series -ContentType 'application/json' -Body $seriesBody -WebSession $DayTrailSession
+$stopBody = @{ fromDate = '2026-12-01' } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://localhost:4000/api/tasks/series/$($series.series.id)/stop" -ContentType 'application/json' -Body $stopBody -WebSession $DayTrailSession
+```
+
+Kết quả mong đợi: tạo trả HTTP 201 cùng `createdCount`; dừng trả số lần đã xóa và giữ lại. Ngày kết thúc được tính trong khoảng. Dừng chuỗi chỉ xóa lần chưa hoàn thành và chưa có note từ `fromDate` theo ngày dự kiến ban đầu.
+
 ## Chạy cùng frontend
 
 Giữ backend chạy và mở terminal PowerShell thứ hai:
@@ -121,4 +145,4 @@ cd C:\daytrail-web
 npm run dev
 ```
 
-Mở `http://localhost:5173`. Giao diện tài khoản, danh sách Hôm nay và bốn chế độ Lịch Năm/Tháng/Tuần/Ngày đã có; nhật ký, ảnh và lịch lặp vẫn chưa triển khai.
+Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay và bốn chế độ Lịch đã có. Backend đã hỗ trợ công việc lặp, nhưng form/giao diện lặp chưa triển khai; nhật ký và ảnh cũng chưa có.

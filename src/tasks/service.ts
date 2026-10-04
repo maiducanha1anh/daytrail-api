@@ -22,6 +22,11 @@ export function publicTask(task: TaskDocument) {
     description: task.description,
     note: task.note,
     repeat: task.repeat,
+    recurrence: task.seriesId && task.originalDate ? {
+      seriesId: task.seriesId.toString(),
+      originalDate: task.originalDate,
+      frequency: task.repeat,
+    } : null,
     completed: task.completed,
     completedAt: task.completedAt?.toISOString() ?? null,
     createdAt: task.createdAt.toISOString(),

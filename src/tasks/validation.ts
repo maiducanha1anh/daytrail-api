@@ -1,4 +1,4 @@
-import { TASK_PRIORITIES, type TaskPriority } from '../models/Task.js'
+import { TASK_PRIORITIES, TASK_SERIES_FREQUENCIES, type TaskPriority, type TaskSeriesFrequency } from '../models/Task.js'
 
 export const TASK_NAME_MAX_LENGTH = 120
 export const TASK_GROUP_MAX_LENGTH = 80
@@ -22,6 +22,19 @@ export type CreateTaskInput = {
   priority: TaskPriority
   repeat: 'none'
   startTime: string
+}
+
+export type CreateTaskSeriesInput = {
+  date: string
+  description: string | null
+  endDate: string
+  endTime: string
+  frequency: TaskSeriesFrequency
+  group: string | null
+  name: string
+  priority: TaskPriority
+  startTime: string
+  weekdays: number[]
 }
 
 export type UpdateTaskInput = Partial<Pick<CreateTaskInput, 'description' | 'endTime' | 'group' | 'name' | 'note' | 'priority' | 'startTime'>>
@@ -76,8 +89,25 @@ function priority(value: unknown) {
 }
 
 function repeat(value: unknown) {
-  if (value !== 'none') throw new TaskInputError('Chặng này chỉ hỗ trợ repeat="none".')
+  if (value !== 'none') throw new TaskInputError('API tạo công việc một lần chỉ hỗ trợ repeat="none".')
   return 'none' as const
+}
+
+function seriesFrequency(value: unknown) {
+  if (typeof value !== 'string' || !TASK_SERIES_FREQUENCIES.includes(value as TaskSeriesFrequency)) {
+    throw new TaskInputError('repeat.frequency phải là daily, weekly hoặc monthly.')
+  }
+  return value as TaskSeriesFrequency
+}
+
+function weeklyDays(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0) throw new TaskInputError('repeat.weekdays phải là mảng có ít nhất một thứ từ 1 đến 7.')
+  const values = value.map((weekday) => {
+    if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7) throw new TaskInputError('Mỗi repeat.weekdays phải là số nguyên từ 1 (thứ Hai) đến 7 (Chủ nhật).')
+    return weekday as number
+  })
+  if (new Set(values).size !== values.length) throw new TaskInputError('repeat.weekdays không được chứa giá trị trùng.')
+  return values.sort((left, right) => left - right)
 }
 
 function leapYear(year: number) {
@@ -108,7 +138,7 @@ export function validateTimeOrder(startTime: string, endTime: string) {
   if (endTime <= startTime) throw new TaskInputError('endTime phải sau startTime trong cùng ngày.')
 }
 
-function dateDayNumber(date: string) {
+export function dateDayNumber(date: string) {
   const [year, month, day] = date.split('-').map(Number)
   const value = new Date(0)
   value.setUTCHours(0, 0, 0, 0)
@@ -150,6 +180,37 @@ export function validateCreateTask(value: unknown): CreateTaskInput {
   }
 }
 
+export function validateCreateTaskSeries(value: unknown): CreateTaskSeriesInput {
+  const body = record(value)
+  rejectUnknownFields(body, ['date', 'name', 'startTime', 'endTime', 'priority', 'group', 'description', 'repeat'])
+  const recurrence = record(body.repeat)
+  rejectUnknownFields(recurrence, ['frequency', 'endDate', 'weekdays'])
+  const date = localDate(body.date)
+  const endDate = localDate(recurrence.endDate, 'repeat.endDate')
+  const rangeDays = dateDayNumber(endDate) - dateDayNumber(date) + 1
+  if (rangeDays < 1) throw new TaskInputError('repeat.endDate phải bằng hoặc sau date.')
+  if (rangeDays > TASK_RANGE_MAX_DAYS) throw new TaskInputError(`Chuỗi lặp không được vượt quá ${TASK_RANGE_MAX_DAYS} ngày tính cả ngày bắt đầu và kết thúc.`)
+  const frequency = seriesFrequency(recurrence.frequency)
+  let weekdays: number[] = []
+  if (frequency === 'weekly') weekdays = weeklyDays(recurrence.weekdays)
+  else if (recurrence.weekdays !== undefined) throw new TaskInputError('repeat.weekdays chỉ dùng khi repeat.frequency="weekly".')
+  const startTime = localTime(body.startTime, 'startTime')
+  const endTime = localTime(body.endTime, 'endTime')
+  validateTimeOrder(startTime, endTime)
+  return {
+    date,
+    description: optionalText(body.description, 'description', TASK_DESCRIPTION_MAX_LENGTH),
+    endDate,
+    endTime,
+    frequency,
+    group: optionalText(body.group, 'group', TASK_GROUP_MAX_LENGTH),
+    name: requiredText(body.name, 'name', TASK_NAME_MAX_LENGTH),
+    priority: body.priority === undefined ? 'normal' : priority(body.priority),
+    startTime,
+    weekdays,
+  }
+}
+
 export function validateTaskUpdate(value: unknown): UpdateTaskInput {
   const body = record(value)
   rejectUnknownFields(body, ['name', 'startTime', 'endTime', 'priority', 'group', 'description', 'note'])
@@ -169,6 +230,17 @@ export function validateDateChange(value: unknown) {
   const body = record(value)
   rejectUnknownFields(body, ['date'])
   return localDate(body.date)
+}
+
+export function validateStopTaskSeries(value: unknown) {
+  const body = record(value)
+  rejectUnknownFields(body, ['fromDate'])
+  return localDate(body.fromDate, 'fromDate')
+}
+
+export function validateTaskSeriesId(value: unknown) {
+  if (typeof value !== 'string' || !/^[0-9a-fA-F]{24}$/.test(value)) throw new TaskInputError('ID chuỗi lặp không hợp lệ.')
+  return value
 }
 
 export function validateCompletionChange(value: unknown) {

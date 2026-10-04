@@ -1,8 +1,9 @@
 import express, { type NextFunction, type Request, type Response } from 'express'
 import { requireAuthentication } from '../middleware/authentication.js'
 import { requireAllowedOrigin, requireJson } from '../middleware/requestSecurity.js'
+import { createTaskSeries, stopTaskSeries, TaskSeriesNotFoundError } from '../tasks/recurrence.js'
 import { createTask, deleteTask, getTask, listTasks, moveTask, setTaskCompletion, taskSummaries, taskSummary, TaskNotFoundError, updateTask, validateTaskId } from '../tasks/service.js'
-import { TaskInputError, validateCompletionChange, validateCreateTask, validateDateChange, validateSummaryQuery, validateSummaryRangeQuery, validateTaskListQuery, validateTaskUpdate } from '../tasks/validation.js'
+import { TaskInputError, validateCompletionChange, validateCreateTask, validateCreateTaskSeries, validateDateChange, validateStopTaskSeries, validateSummaryQuery, validateSummaryRangeQuery, validateTaskListQuery, validateTaskSeriesId, validateTaskUpdate } from '../tasks/validation.js'
 
 type TaskRouterOptions = {
   frontendOrigin: string
@@ -40,6 +41,18 @@ export function createTaskRouter({ frontendOrigin }: TaskRouterOptions) {
     response.json(await taskSummaries(authenticatedUserId(request), validateSummaryRangeQuery(request.query)))
   }))
 
+  router.post('/series', ...writeSecurity, asyncHandler(async (request, response) => {
+    response.status(201).json(await createTaskSeries(authenticatedUserId(request), validateCreateTaskSeries(request.body)))
+  }))
+
+  router.post('/series/:seriesId/stop', ...writeSecurity, asyncHandler(async (request, response) => {
+    response.json(await stopTaskSeries(
+      authenticatedUserId(request),
+      validateTaskSeriesId(request.params.seriesId),
+      validateStopTaskSeries(request.body),
+    ))
+  }))
+
   router.post('/', ...writeSecurity, asyncHandler(async (request, response) => {
     response.status(201).json({ task: await createTask(authenticatedUserId(request), validateCreateTask(request.body)) })
   }))
@@ -71,6 +84,10 @@ export function createTaskRouter({ frontendOrigin }: TaskRouterOptions) {
       return
     }
     if (error instanceof TaskNotFoundError) {
+      response.status(404).json({ error: error.message })
+      return
+    }
+    if (error instanceof TaskSeriesNotFoundError) {
       response.status(404).json({ error: error.message })
       return
     }
