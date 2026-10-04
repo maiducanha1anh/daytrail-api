@@ -26,6 +26,7 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 - Unique index: chỉ mục bảo đảm email và hash token không bị trùng.
 - Task index: chỉ mục ghép `userId`, `date`, `startTime`, `_id` phục vụ truy vấn theo chủ sở hữu/ngày và sắp xếp ổn định.
 - Recurrence indexes: chỉ mục chuỗi theo chủ sở hữu/ngày kết thúc và unique index `(userId, seriesId, originalDate)` chống tạo trùng lần thực hiện.
+- Journal index: unique index `(userId, date)` bảo đảm mỗi tài khoản chỉ có một nhật ký mỗi ngày và hỗ trợ truy vấn khoảng ngày.
 - TTL index: chỉ mục giúp MongoDB dọn session hết hạn; API vẫn tự kiểm tra `expiresAt` ở mỗi request.
 - Graceful shutdown: quy trình đóng HTTP server rồi đóng Mongoose khi nhận `SIGINT` hoặc `SIGTERM`, với timeout 10 giây.
 
@@ -47,8 +48,12 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 - `GET/PATCH/DELETE /api/tasks/:id`: đọc, sửa và xóa công việc thuộc user hiện tại.
 - `PATCH /api/tasks/:id/date`: chuyển ngày mà không reset nội dung/trạng thái.
 - `PATCH /api/tasks/:id/completion`: đặt rõ `completed=true/false`.
+- `GET /api/journals/:date`: đọc đầy đủ nhật ký một ngày; ngày trống trả `journal: null`.
+- `PUT /api/journals/:date`: tạo hoặc cập nhật nhật ký bằng version đã đọc.
+- `DELETE /api/journals/:date`: xóa nhật ký bằng version đã đọc.
+- `GET /api/journals`: danh sách đoạn trích theo khoảng tối đa 366 ngày, có phân trang.
 
-Mọi endpoint công việc yêu cầu session. Các thao tác ghi yêu cầu JSON và Origin hợp lệ; mọi truy vấn/sửa/xóa đều kèm `userId` lấy từ session.
+Mọi endpoint công việc và nhật ký yêu cầu session. Các thao tác ghi yêu cầu JSON và Origin hợp lệ; mọi truy vấn/sửa/xóa đều kèm `userId` lấy từ session.
 
 Nếu MongoDB mất kết nối sau khi API đã mở cổng, endpoint cần database trả HTTP 503 với `code="DATABASE_UNAVAILABLE"` và `Retry-After: 5`. Đây là lỗi dịch vụ, không phải phiên hết hạn: backend không trả 401 và không xóa cookie. `/api/health` chỉ xác nhận tiến trình Express còn sống; luôn dùng `/api/ready` để kết luận database có sẵn sàng hay không.
 
@@ -58,7 +63,7 @@ Integration test là kiểm thử nhiều thành phần cùng lúc: route, middl
 
 - Test chỉ chấp nhận `MONGODB_TEST_URI` có pathname `/daytrail_test`; không fallback sang `MONGODB_URI`.
 - Database user test chỉ cần `readWrite` trên `daytrail_test`.
-- Test không drop database hoặc collection. Mỗi lần chạy dùng domain email ngẫu nhiên rồi chỉ xóa task, chuỗi lặp, session và user của lần đó theo đúng `userId`.
+- Test không drop database hoặc collection. Mỗi lần chạy dùng domain email ngẫu nhiên rồi chỉ xóa journal, task, chuỗi lặp, session và user của lần đó theo đúng `userId`.
 
 Mở PowerShell tại backend và chạy:
 
@@ -67,7 +72,7 @@ cd C:\daytrail-api
 npm test
 ```
 
-Bộ test hiện có 29 test (8 auth, 10 công việc, 10 công việc lặp, 1 lỗi database). Kết quả mong đợi là 29 PASS. Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Bộ test hiện có 38 test (8 auth, 10 công việc, 10 công việc lặp, 9 nhật ký, 1 lỗi database). Kết quả mong đợi là 38 PASS. Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
@@ -79,12 +84,14 @@ Kết quả nghiệm thu:
 - Kiểm chứng chặng 3A: Codex chạy 19/19 test PASS trên `daytrail_test`. Test tổng quan khoảng xác nhận cách ly tài khoản, ngày trống, giới hạn 366 ngày và tổng số đúng với 105 công việc — nhiều hơn một trang API.
 - Kiểm chứng chặng 3B.1: Codex chạy 29/29 test PASS trên `daytrail_test`. Suite recurrence kiểm tra ngày/tuần/tháng, 29/30/31, năm nhuận, giao năm, giới hạn 366 ngày, độc lập từng lần, dừng chuỗi, cách ly tài khoản, không đếm đôi và rollback transaction.
 - Kiểm chứng chặng 3B.2: Codex chạy lại 29/29 test PASS; test đọc metadata chuỗi xác nhận đúng chủ sở hữu. Browser test riêng dùng 4015/5176 và `daytrail_test`; dữ liệu test được xóa theo đúng user marker.
+- Kiểm chứng chặng 4A: Codex chạy 38/38 test PASS trên `daytrail_test`. Suite nhật ký 9/9 PASS, gồm tạo/đọc/sửa/xóa, xung đột version, hai request tạo đồng thời, phân trang, đoạn trích, cách ly tài khoản và cleanup theo user marker.
 
 ## Giới hạn công việc hiện tại
 
 - API một lần `POST /api/tasks` vẫn chỉ nhận `repeat="none"`; chuỗi lặp dùng endpoint `/api/tasks/series` riêng.
 - Chuỗi chỉ hỗ trợ `daily`, `weekly`, `monthly`, bắt buộc ngày kết thúc và tối đa 366 ngày. Tháng thiếu ngày tương ứng sẽ được bỏ qua.
 - Frontend đã có giao diện tạo/dừng chuỗi và thao tác từng lần. Chưa có sửa hàng loạt quy tắc, ảnh hoặc nhật ký ngày.
+- Backend đã có nhật ký văn bản tối đa 20.000 ký tự. Frontend nhật ký thuộc 4B; ảnh nhật ký thuộc 4C và chưa được triển khai.
 - Ngày được lưu dưới dạng lịch địa phương `YYYY-MM-DD`, không đổi sang UTC. Giờ bắt đầu/kết thúc phải cùng ngày và `endTime` phải sau `startTime`.
 
 ## Transaction của chuỗi lặp

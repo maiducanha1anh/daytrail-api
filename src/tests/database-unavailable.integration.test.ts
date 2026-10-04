@@ -31,6 +31,14 @@ test('database outage returns 503 without treating a presented session as expire
     assert.equal(me.body.code, 'DATABASE_UNAVAILABLE')
     assert.equal(me.headers['retry-after'], '5')
     assert.equal(me.headers['set-cookie'], undefined)
+
+    const journal = await request(app)
+      .get('/api/journals/2026-01-01')
+      .set('Cookie', `${SESSION_COOKIE_NAME}=${'a'.repeat(43)}`)
+    assert.equal(journal.status, 503)
+    assert.equal(journal.body.code, 'DATABASE_UNAVAILABLE')
+    assert.equal(journal.headers['retry-after'], '5')
+    assert.equal(journal.headers['set-cookie'], undefined)
   } finally {
     mongoose.set('bufferTimeoutMS', previousBufferTimeout)
   }

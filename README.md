@@ -1,6 +1,6 @@
 # DayTrail API
 
-Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên, công việc theo ngày, tổng quan Lịch và chuỗi lặp hữu hạn đã hoàn thành. Frontend chặng 3B.2 đã dùng API này để tạo, xem và dừng lặp; ảnh và nhật ký ngày chưa được triển khai.
+Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên, công việc theo ngày, tổng quan Lịch, chuỗi lặp hữu hạn và API nhật ký văn bản theo ngày đã hoàn thành. Frontend nhật ký và ảnh chưa được triển khai.
 
 ## Chuẩn bị trên Windows
 
@@ -60,7 +60,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 29 test: 8 auth, 10 công việc, 10 công việc lặp và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex chạy lại trong chặng 3B.2: 29 PASS, 0 fail/cancelled/skipped/todo.
+- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 38 test: 8 auth, 10 công việc, 10 công việc lặp, 9 nhật ký và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex chạy trong chặng 4A: 38 PASS, 0 fail/cancelled/skipped/todo.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
@@ -146,4 +146,25 @@ cd C:\daytrail-web
 npm run dev
 ```
 
-Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay, bốn chế độ Lịch và công việc lặp hữu hạn đã có. Nhật ký và ảnh chưa được triển khai.
+Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay, bốn chế độ Lịch và công việc lặp hữu hạn đã có. Backend nhật ký văn bản đã có nhưng giao diện nhật ký và ảnh chưa được triển khai.
+
+## Thử API nhật ký
+
+Đăng nhập trước để có `$DayTrailSession`. Tạo mới phải gửi `version = $null`; cập nhật và xóa phải gửi version mới nhất đã đọc:
+
+```powershell
+$date = '2026-10-04'
+$createBody = @{ content = "Một ngày đáng nhớ.`nGiữ nguyên dòng mới."; version = $null } | ConvertTo-Json
+$created = Invoke-RestMethod -Method Put -Uri "http://localhost:4000/api/journals/$date" -ContentType 'application/json' -Body $createBody -WebSession $DayTrailSession
+
+Invoke-RestMethod -Uri "http://localhost:4000/api/journals/$date" -WebSession $DayTrailSession
+Invoke-RestMethod -Uri 'http://localhost:4000/api/journals?from=2026-10-01&to=2026-10-31&page=1&limit=20' -WebSession $DayTrailSession
+
+$updateBody = @{ content = 'Nội dung đã sửa'; version = $created.journal.version } | ConvertTo-Json
+$updated = Invoke-RestMethod -Method Put -Uri "http://localhost:4000/api/journals/$date" -ContentType 'application/json' -Body $updateBody -WebSession $DayTrailSession
+
+$deleteBody = @{ version = $updated.journal.version } | ConvertTo-Json
+Invoke-WebRequest -Method Delete -Uri "http://localhost:4000/api/journals/$date" -ContentType 'application/json' -Body $deleteBody -WebSession $DayTrailSession
+```
+
+Kết quả mong đợi: tạo trả HTTP 201, đọc/cập nhật trả HTTP 200 và xóa trả HTTP 204. HTTP 409 nghĩa dữ liệu đã thay đổi ở tab khác; đọc lại nhật ký trước khi quyết định lưu lại. Contract đầy đủ nằm tại `C:\daytrail-web\docs\API_CONTRACT.md`.

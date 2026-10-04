@@ -2,6 +2,7 @@ import cors from 'cors'
 import express from 'express'
 import cookieParser from 'cookie-parser'
 import { createAuthRouter } from './routes/auth.js'
+import { createJournalRouter } from './routes/journals.js'
 import { createTaskRouter } from './routes/tasks.js'
 import { isDatabaseUnavailableError, safeDatabaseFailureCode } from './database/mongoose.js'
 
@@ -35,6 +36,7 @@ export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecur
     sessionTtlMs,
   }))
   app.use('/api/tasks', createTaskRouter({ frontendOrigin }))
+  app.use('/api/journals', createJournalRouter({ frontendOrigin }))
   app.use((error: unknown, _request: express.Request, response: express.Response, next: express.NextFunction) => {
     void next
     if (error instanceof SyntaxError && 'status' in error && error.status === 400) {
