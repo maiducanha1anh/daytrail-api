@@ -27,6 +27,7 @@ let pingTimeoutMs = 3_000
 let primaryAgent: ReturnType<typeof request.agent>
 let secondaryAgent: ReturnType<typeof request.agent>
 let primaryUserId = ''
+let secondaryUserId = ''
 let mainTaskId = ''
 
 function createTestApp() {
@@ -84,7 +85,7 @@ before(async () => {
   primaryAgent = request.agent(app)
   secondaryAgent = request.agent(app)
   primaryUserId = await registerAndLogin(primaryAgent, primaryEmail, 'Người dùng công việc')
-  await registerAndLogin(secondaryAgent, secondaryEmail, 'Người dùng thứ hai')
+  secondaryUserId = await registerAndLogin(secondaryAgent, secondaryEmail, 'Người dùng thứ hai')
 })
 
 after(async () => {
@@ -107,6 +108,7 @@ describe('DayTrail task integration', { concurrency: 1 }, () => {
   test('all task routes require a session and writes enforce Origin and JSON', async () => {
     assert.equal((await request(app).get(`/api/tasks?date=${baseDate}`)).status, 401)
     assert.equal((await request(app).get(`/api/tasks/summary?date=${baseDate}`)).status, 401)
+    assert.equal((await request(app).get(`/api/tasks/summaries?from=${baseDate}&to=${baseDate}`)).status, 401)
     assert.equal((await request(app).post('/api/tasks').set('Origin', frontendOrigin).send(validTask())).status, 401)
 
     const wrongOrigin = await primaryAgent.post('/api/tasks').set('Origin', 'https://example.invalid').send(validTask())
@@ -288,6 +290,64 @@ describe('DayTrail task integration', { concurrency: 1 }, () => {
     assert.equal((await primaryAgent.delete(`/api/tasks/${firstId}`).set('Origin', frontendOrigin).set('Content-Type', 'application/json').send({})).status, 204)
     const empty = await primaryAgent.get(`/api/tasks/summary?date=${summaryDate}`)
     assert.deepEqual(empty.body, { date: summaryDate, total: 0, completed: 0, incomplete: 0, completionPercentage: 0 })
+  })
+
+  test('range summaries cover all matching tasks, omit empty days, and isolate owners', async () => {
+    const rangeDate = '2026-04-01'
+    const secondDate = '2026-04-02'
+    const emptyDate = '2026-04-03'
+    const records = Array.from({ length: 105 }, (_, index) => ({
+      userId: new mongoose.Types.ObjectId(primaryUserId),
+      date: rangeDate,
+      name: `Tổng hợp ${index + 1}`,
+      startTime: '08:00',
+      endTime: '09:00',
+      priority: 'normal',
+      repeat: 'none',
+      completed: index < 21,
+      completedAt: index < 21 ? new Date() : null,
+    }))
+    records.push({
+      userId: new mongoose.Types.ObjectId(primaryUserId),
+      date: secondDate,
+      name: 'Ngày thứ hai',
+      startTime: '09:00',
+      endTime: '10:00',
+      priority: 'normal',
+      repeat: 'none',
+      completed: true,
+      completedAt: new Date(),
+    })
+    await Task.insertMany(records)
+    await Task.create({
+      userId: new mongoose.Types.ObjectId(secondaryUserId),
+      date: rangeDate,
+      name: 'Dữ liệu tài khoản khác',
+      startTime: '10:00',
+      endTime: '11:00',
+      priority: 'normal',
+      repeat: 'none',
+    })
+
+    const result = await primaryAgent.get(`/api/tasks/summaries?from=${rangeDate}&to=${emptyDate}`)
+    assert.equal(result.status, 200)
+    assert.equal(result.body.from, rangeDate)
+    assert.equal(result.body.to, emptyDate)
+    assert.deepEqual(result.body.summaries, [
+      { date: rangeDate, total: 105, completed: 21, incomplete: 84, completionPercentage: 20 },
+      { date: secondDate, total: 1, completed: 1, incomplete: 0, completionPercentage: 100 },
+    ])
+
+    const isolated = await secondaryAgent.get(`/api/tasks/summaries?from=${rangeDate}&to=${emptyDate}`)
+    assert.equal(isolated.status, 200)
+    assert.deepEqual(isolated.body.summaries, [
+      { date: rangeDate, total: 1, completed: 0, incomplete: 1, completionPercentage: 0 },
+    ])
+
+    assert.equal((await primaryAgent.get('/api/tasks/summaries?from=2026-04-01')).status, 400)
+    assert.equal((await primaryAgent.get('/api/tasks/summaries?from=2026-04-03&to=2026-04-01')).status, 400)
+    assert.equal((await primaryAgent.get('/api/tasks/summaries?from=2025-01-01&to=2026-01-02')).status, 400)
+    assert.equal((await primaryAgent.get('/api/tasks/summaries?from=2024-01-01&to=2024-12-31')).status, 200)
   })
 
   test('a second account cannot view, edit, move, complete, or delete another user task', async () => {

@@ -33,6 +33,11 @@ export type TaskListInput = {
   to: string
 }
 
+export type TaskSummaryRangeInput = {
+  from: string
+  to: string
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -205,4 +210,15 @@ export function validateSummaryQuery(value: unknown) {
   const query = record(value)
   rejectUnknownFields(query, ['date'])
   return localDate(queryString(query.date, 'date'))
+}
+
+export function validateSummaryRangeQuery(value: unknown): TaskSummaryRangeInput {
+  const query = record(value)
+  rejectUnknownFields(query, ['from', 'to'])
+  const from = localDate(queryString(query.from, 'from'), 'from')
+  const to = localDate(queryString(query.to, 'to'), 'to')
+  const rangeDays = dateDayNumber(to) - dateDayNumber(from) + 1
+  if (rangeDays < 1) throw new TaskInputError('to phải bằng hoặc sau from.')
+  if (rangeDays > TASK_RANGE_MAX_DAYS) throw new TaskInputError(`Khoảng ngày không được vượt quá ${TASK_RANGE_MAX_DAYS} ngày.`)
+  return { from, to }
 }

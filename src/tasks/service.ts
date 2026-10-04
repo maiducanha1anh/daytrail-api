@@ -1,6 +1,6 @@
 import { Types } from 'mongoose'
 import { Task, type TaskDocument } from '../models/Task.js'
-import { TaskInputError, type CreateTaskInput, type TaskListInput, type UpdateTaskInput, validateTimeOrder } from './validation.js'
+import { TaskInputError, type CreateTaskInput, type TaskListInput, type TaskSummaryRangeInput, type UpdateTaskInput, validateTimeOrder } from './validation.js'
 
 export class TaskNotFoundError extends Error {
   override name = 'TaskNotFoundError'
@@ -108,6 +108,25 @@ export async function taskSummary(userId: string, date: string) {
     completed,
     incomplete: total - completed,
     completionPercentage: total === 0 ? 0 : Math.round((completed / total) * 100),
+  }
+}
+
+export async function taskSummaries(userId: string, input: TaskSummaryRangeInput) {
+  const summaries = await Task.aggregate<{ _id: string; completed: number; total: number }>([
+    { $match: { userId: ownerId(userId), date: { $gte: input.from, $lte: input.to } } },
+    { $group: { _id: '$date', total: { $sum: 1 }, completed: { $sum: { $cond: ['$completed', 1, 0] } } } },
+    { $sort: { _id: 1 } },
+  ])
+  return {
+    from: input.from,
+    to: input.to,
+    summaries: summaries.map((summary) => ({
+      date: summary._id,
+      total: summary.total,
+      completed: summary.completed,
+      incomplete: summary.total - summary.completed,
+      completionPercentage: Math.round((summary.completed / summary.total) * 100),
+    })),
   }
 }
 

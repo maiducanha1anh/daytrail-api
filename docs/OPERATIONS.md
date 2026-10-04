@@ -39,6 +39,7 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 - `POST /api/tasks`: tạo công việc một lần.
 - `GET /api/tasks`: danh sách theo một ngày hoặc khoảng ngày có phân trang.
 - `GET /api/tasks/summary`: tổng quan một ngày.
+- `GET /api/tasks/summaries`: tổng quan theo từng ngày trong khoảng tối đa 366 ngày; không trả nội dung/note.
 - `GET/PATCH/DELETE /api/tasks/:id`: đọc, sửa và xóa công việc thuộc user hiện tại.
 - `PATCH /api/tasks/:id/date`: chuyển ngày mà không reset nội dung/trạng thái.
 - `PATCH /api/tasks/:id/completion`: đặt rõ `completed=true/false`.
@@ -62,7 +63,7 @@ cd C:\daytrail-api
 npm test
 ```
 
-Bộ test hiện có 18 test (8 auth, 9 công việc, 1 lỗi database). Kết quả mong đợi là 18 PASS. Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Bộ test hiện có 19 test (8 auth, 10 công việc, 1 lỗi database). Kết quả mong đợi là 19 PASS. Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
@@ -71,11 +72,12 @@ Kết quả nghiệm thu:
 - Codex kiểm tra cleanup: không còn user mang marker của bộ test; phép kiểm chứng restart còn 0 user và 0 session tạm.
 - Chặng 2A: Codex chạy toàn bộ 17 test trên `daytrail_test`; cleanup của test công việc xác nhận còn 0 task, 0 session và 0 user thuộc run.
 - Nghiệm thu chặng 2B: sau khi người dùng thêm IP công cộng hiện tại vào Atlas IP Access List với trạng thái Active, Codex chạy lại 18/18 test PASS. Kiểm tra sau cleanup xác nhận còn 0 user, session và task mang marker test.
+- Kiểm chứng chặng 3A: Codex chạy 19/19 test PASS trên `daytrail_test`. Test tổng quan khoảng xác nhận cách ly tài khoản, ngày trống, giới hạn 366 ngày và tổng số đúng với 105 công việc — nhiều hơn một trang API.
 
-## Giới hạn chặng 2A
+## Giới hạn công việc hiện tại
 
 - Chỉ hỗ trợ công việc một lần; `repeat` chỉ nhận `none`.
-- Chưa có công việc lặp, ảnh hoặc nhật ký ngày. Frontend Hôm nay và Lịch cơ bản thuộc chặng 2B đã được kiểm chứng riêng trên `daytrail_test`.
+- Chưa có công việc lặp, ảnh hoặc nhật ký ngày. Frontend Hôm nay và bốn chế độ Lịch của chặng 3A đã được kiểm chứng riêng trên `daytrail_test`.
 - Ngày được lưu dưới dạng lịch địa phương `YYYY-MM-DD`, không đổi sang UTC. Giờ bắt đầu/kết thúc phải cùng ngày và `endTime` phải sau `startTime`.
 
 ## Bảo mật phiên đăng nhập

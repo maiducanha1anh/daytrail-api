@@ -1,6 +1,6 @@
 # DayTrail API
 
-Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên và API công việc một lần theo ngày đã hoàn thành. Frontend chặng 2B đã dùng các API này cho Hôm nay và Lịch; công việc lặp, ảnh và nhật ký ngày chưa được triển khai.
+Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên và API công việc một lần theo ngày đã hoàn thành. Chặng 3A bổ sung tổng quan công việc theo khoảng ngày cho bốn chế độ Lịch; công việc lặp, ảnh và nhật ký ngày chưa được triển khai.
 
 ## Chuẩn bị trên Windows
 
@@ -60,7 +60,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 18 test: 8 auth, 9 công việc và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex đã chạy lại sau khi Atlas phục hồi: 18 PASS, 0 fail; dữ liệu có marker test còn lại bằng 0.
+- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 19 test: 8 auth, 10 công việc và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex chạy trong chặng 3A: 19 PASS, 0 fail/cancelled/skipped/todo.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
@@ -104,12 +104,13 @@ $taskBody = @{
 
 $created = Invoke-RestMethod -Method Post -Uri http://localhost:4000/api/tasks -ContentType 'application/json' -Body $taskBody -WebSession $DayTrailSession
 Invoke-RestMethod -Uri 'http://localhost:4000/api/tasks?date=2026-10-04' -WebSession $DayTrailSession
+Invoke-RestMethod -Uri 'http://localhost:4000/api/tasks/summaries?from=2026-01-01&to=2026-12-31' -WebSession $DayTrailSession
 
 $completion = @{ completed = $true } | ConvertTo-Json
 Invoke-RestMethod -Method Patch -Uri "http://localhost:4000/api/tasks/$($created.task.id)/completion" -ContentType 'application/json' -Body $completion -WebSession $DayTrailSession
 ```
 
-Kết quả mong đợi: tạo trả HTTP 201; danh sách và cập nhật hoàn thành trả HTTP 200. Nếu nhận 401, đăng nhập lại; nếu nhận 400, đối chiếu ngày `YYYY-MM-DD`, giờ `HH:mm` và [hợp đồng API](C:\daytrail-web\docs\API_CONTRACT.md).
+Kết quả mong đợi: tạo trả HTTP 201; danh sách, tổng quan khoảng và cập nhật hoàn thành trả HTTP 200. Tổng quan khoảng chỉ trả số liệu theo ngày, không trả note. Nếu nhận 401, đăng nhập lại; nếu nhận 400, đối chiếu ngày `YYYY-MM-DD`, giờ `HH:mm` và [hợp đồng API](C:\daytrail-web\docs\API_CONTRACT.md).
 
 ## Chạy cùng frontend
 
@@ -120,4 +121,4 @@ cd C:\daytrail-web
 npm run dev
 ```
 
-Mở `http://localhost:5173`. Giao diện tài khoản, danh sách Hôm nay và lập kế hoạch cơ bản trong Lịch đã có; nhật ký, ảnh và lịch lặp vẫn chưa triển khai.
+Mở `http://localhost:5173`. Giao diện tài khoản, danh sách Hôm nay và bốn chế độ Lịch Năm/Tháng/Tuần/Ngày đã có; nhật ký, ảnh và lịch lặp vẫn chưa triển khai.

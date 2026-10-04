@@ -1,8 +1,8 @@
 import express, { type NextFunction, type Request, type Response } from 'express'
 import { requireAuthentication } from '../middleware/authentication.js'
 import { requireAllowedOrigin, requireJson } from '../middleware/requestSecurity.js'
-import { createTask, deleteTask, getTask, listTasks, moveTask, setTaskCompletion, taskSummary, TaskNotFoundError, updateTask, validateTaskId } from '../tasks/service.js'
-import { TaskInputError, validateCompletionChange, validateCreateTask, validateDateChange, validateSummaryQuery, validateTaskListQuery, validateTaskUpdate } from '../tasks/validation.js'
+import { createTask, deleteTask, getTask, listTasks, moveTask, setTaskCompletion, taskSummaries, taskSummary, TaskNotFoundError, updateTask, validateTaskId } from '../tasks/service.js'
+import { TaskInputError, validateCompletionChange, validateCreateTask, validateDateChange, validateSummaryQuery, validateSummaryRangeQuery, validateTaskListQuery, validateTaskUpdate } from '../tasks/validation.js'
 
 type TaskRouterOptions = {
   frontendOrigin: string
@@ -34,6 +34,10 @@ export function createTaskRouter({ frontendOrigin }: TaskRouterOptions) {
 
   router.get('/summary', asyncHandler(async (request, response) => {
     response.json(await taskSummary(authenticatedUserId(request), validateSummaryQuery(request.query)))
+  }))
+
+  router.get('/summaries', asyncHandler(async (request, response) => {
+    response.json(await taskSummaries(authenticatedUserId(request), validateSummaryRangeQuery(request.query)))
   }))
 
   router.post('/', ...writeSecurity, asyncHandler(async (request, response) => {
