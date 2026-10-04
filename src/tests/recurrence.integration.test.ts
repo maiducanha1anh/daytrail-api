@@ -134,6 +134,11 @@ describe('DayTrail recurrence integration', { concurrency: 1 }, () => {
     assert.equal(created.body.series.frequency, 'daily')
     assert.deepEqual(created.body.series.weekdays, [])
     assert.equal('userId' in created.body.series, false)
+    const seriesDetail = await primaryAgent.get(`/api/tasks/series/${created.body.series.id}`)
+    assert.equal(seriesDetail.status, 200)
+    assert.equal(seriesDetail.body.series.startDate, '2026-06-01')
+    assert.equal(seriesDetail.body.series.endDate, '2026-06-03')
+    assert.equal((await secondaryAgent.get(`/api/tasks/series/${created.body.series.id}`)).status, 404)
 
     const firstRead = await allTasks(primaryAgent, '2026-06-01', '2026-06-03')
     const secondRead = await allTasks(primaryAgent, '2026-06-01', '2026-06-03')

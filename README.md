@@ -1,6 +1,6 @@
 # DayTrail API
 
-Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên, công việc theo ngày và tổng quan Lịch đã hoàn thành. Chặng 3B.1 bổ sung chuỗi công việc lặp hữu hạn; giao diện lặp, ảnh và nhật ký ngày chưa được triển khai.
+Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên, công việc theo ngày, tổng quan Lịch và chuỗi lặp hữu hạn đã hoàn thành. Frontend chặng 3B.2 đã dùng API này để tạo, xem và dừng lặp; ảnh và nhật ký ngày chưa được triển khai.
 
 ## Chuẩn bị trên Windows
 
@@ -60,7 +60,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 29 test: 8 auth, 10 công việc, 10 công việc lặp và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex chạy trong chặng 3B.1: 29 PASS, 0 fail/cancelled/skipped/todo.
+- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 29 test: 8 auth, 10 công việc, 10 công việc lặp và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex chạy lại trong chặng 3B.2: 29 PASS, 0 fail/cancelled/skipped/todo.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
@@ -130,6 +130,7 @@ $seriesBody = @{
 } | ConvertTo-Json -Depth 3
 
 $series = Invoke-RestMethod -Method Post -Uri http://localhost:4000/api/tasks/series -ContentType 'application/json' -Body $seriesBody -WebSession $DayTrailSession
+Invoke-RestMethod -Uri "http://localhost:4000/api/tasks/series/$($series.series.id)" -WebSession $DayTrailSession
 $stopBody = @{ fromDate = '2026-12-01' } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri "http://localhost:4000/api/tasks/series/$($series.series.id)/stop" -ContentType 'application/json' -Body $stopBody -WebSession $DayTrailSession
 ```
@@ -145,4 +146,4 @@ cd C:\daytrail-web
 npm run dev
 ```
 
-Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay và bốn chế độ Lịch đã có. Backend đã hỗ trợ công việc lặp, nhưng form/giao diện lặp chưa triển khai; nhật ký và ảnh cũng chưa có.
+Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay, bốn chế độ Lịch và công việc lặp hữu hạn đã có. Nhật ký và ảnh chưa được triển khai.

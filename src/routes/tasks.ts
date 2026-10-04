@@ -1,7 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express'
 import { requireAuthentication } from '../middleware/authentication.js'
 import { requireAllowedOrigin, requireJson } from '../middleware/requestSecurity.js'
-import { createTaskSeries, stopTaskSeries, TaskSeriesNotFoundError } from '../tasks/recurrence.js'
+import { createTaskSeries, getTaskSeries, stopTaskSeries, TaskSeriesNotFoundError } from '../tasks/recurrence.js'
 import { createTask, deleteTask, getTask, listTasks, moveTask, setTaskCompletion, taskSummaries, taskSummary, TaskNotFoundError, updateTask, validateTaskId } from '../tasks/service.js'
 import { TaskInputError, validateCompletionChange, validateCreateTask, validateCreateTaskSeries, validateDateChange, validateStopTaskSeries, validateSummaryQuery, validateSummaryRangeQuery, validateTaskListQuery, validateTaskSeriesId, validateTaskUpdate } from '../tasks/validation.js'
 
@@ -39,6 +39,10 @@ export function createTaskRouter({ frontendOrigin }: TaskRouterOptions) {
 
   router.get('/summaries', asyncHandler(async (request, response) => {
     response.json(await taskSummaries(authenticatedUserId(request), validateSummaryRangeQuery(request.query)))
+  }))
+
+  router.get('/series/:seriesId', asyncHandler(async (request, response) => {
+    response.json({ series: await getTaskSeries(authenticatedUserId(request), validateTaskSeriesId(request.params.seriesId)) })
   }))
 
   router.post('/series', ...writeSecurity, asyncHandler(async (request, response) => {

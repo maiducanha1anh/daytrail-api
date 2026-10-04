@@ -105,6 +105,12 @@ export async function createTaskSeries(userId: string, input: CreateTaskSeriesIn
   }
 }
 
+export async function getTaskSeries(userId: string, seriesId: string) {
+  const series = await TaskSeries.findOne({ _id: seriesId, userId: ownerId(userId) })
+  if (!series) throw new TaskSeriesNotFoundError('Không tìm thấy chuỗi lặp.')
+  return publicTaskSeries(series)
+}
+
 export async function stopTaskSeries(userId: string, seriesId: string, requestedFromDate: string) {
   const owner = ownerId(userId)
   const session = await mongoose.startSession()

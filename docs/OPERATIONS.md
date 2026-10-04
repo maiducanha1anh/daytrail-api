@@ -42,6 +42,7 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 - `GET /api/tasks/summary`: tổng quan một ngày.
 - `GET /api/tasks/summaries`: tổng quan theo từng ngày trong khoảng tối đa 366 ngày; không trả nội dung/note.
 - `POST /api/tasks/series`: tạo cấu hình chuỗi và các lần thực hiện hữu hạn trong một transaction.
+- `GET /api/tasks/series/:seriesId`: đọc metadata chuỗi thuộc user hiện tại cho màn hình chi tiết.
 - `POST /api/tasks/series/:seriesId/stop`: dừng chuỗi từ ngày dự kiến, giữ lịch sử có note/đã hoàn thành.
 - `GET/PATCH/DELETE /api/tasks/:id`: đọc, sửa và xóa công việc thuộc user hiện tại.
 - `PATCH /api/tasks/:id/date`: chuyển ngày mà không reset nội dung/trạng thái.
@@ -77,12 +78,13 @@ Kết quả nghiệm thu:
 - Nghiệm thu chặng 2B: sau khi người dùng thêm IP công cộng hiện tại vào Atlas IP Access List với trạng thái Active, Codex chạy lại 18/18 test PASS. Kiểm tra sau cleanup xác nhận còn 0 user, session và task mang marker test.
 - Kiểm chứng chặng 3A: Codex chạy 19/19 test PASS trên `daytrail_test`. Test tổng quan khoảng xác nhận cách ly tài khoản, ngày trống, giới hạn 366 ngày và tổng số đúng với 105 công việc — nhiều hơn một trang API.
 - Kiểm chứng chặng 3B.1: Codex chạy 29/29 test PASS trên `daytrail_test`. Suite recurrence kiểm tra ngày/tuần/tháng, 29/30/31, năm nhuận, giao năm, giới hạn 366 ngày, độc lập từng lần, dừng chuỗi, cách ly tài khoản, không đếm đôi và rollback transaction.
+- Kiểm chứng chặng 3B.2: Codex chạy lại 29/29 test PASS; test đọc metadata chuỗi xác nhận đúng chủ sở hữu. Browser test riêng dùng 4015/5176 và `daytrail_test`; dữ liệu test được xóa theo đúng user marker.
 
 ## Giới hạn công việc hiện tại
 
 - API một lần `POST /api/tasks` vẫn chỉ nhận `repeat="none"`; chuỗi lặp dùng endpoint `/api/tasks/series` riêng.
 - Chuỗi chỉ hỗ trợ `daily`, `weekly`, `monthly`, bắt buộc ngày kết thúc và tối đa 366 ngày. Tháng thiếu ngày tương ứng sẽ được bỏ qua.
-- Chưa có giao diện tạo/dừng chuỗi, sửa hàng loạt quy tắc, ảnh hoặc nhật ký ngày. Frontend Hôm nay và bốn chế độ Lịch vẫn đọc các lần thực hiện như công việc bình thường.
+- Frontend đã có giao diện tạo/dừng chuỗi và thao tác từng lần. Chưa có sửa hàng loạt quy tắc, ảnh hoặc nhật ký ngày.
 - Ngày được lưu dưới dạng lịch địa phương `YYYY-MM-DD`, không đổi sang UTC. Giờ bắt đầu/kết thúc phải cùng ngày và `endTime` phải sau `startTime`.
 
 ## Transaction của chuỗi lặp
