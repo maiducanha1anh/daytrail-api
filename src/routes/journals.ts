@@ -3,9 +3,12 @@ import { deleteJournal, getJournal, JournalConflictError, JournalNotFoundError, 
 import { JournalInputError, journalDate, validateDeleteJournal, validateJournalListQuery, validateSaveJournal } from '../journals/validation.js'
 import { requireAuthentication } from '../middleware/authentication.js'
 import { requireAllowedOrigin, requireJson } from '../middleware/requestSecurity.js'
+import { cleanupOwnerMedia } from '../media/service.js'
+import type { MediaStorage } from '../media/storage.js'
 
 type JournalRouterOptions = {
   frontendOrigin: string
+  mediaStorage?: MediaStorage
 }
 
 type AsyncHandler = (request: Request, response: Response) => Promise<void>
@@ -21,7 +24,7 @@ function authenticatedUserId(request: Request) {
   return request.auth.userId
 }
 
-export function createJournalRouter({ frontendOrigin }: JournalRouterOptions) {
+export function createJournalRouter({ frontendOrigin, mediaStorage }: JournalRouterOptions) {
   const router = express.Router()
   const parseJson = express.json({ limit: '96kb' })
   const writeSecurity = [requireAllowedOrigin(frontendOrigin), requireJson, parseJson]
@@ -46,12 +49,22 @@ export function createJournalRouter({ frontendOrigin }: JournalRouterOptions) {
   }))
 
   router.delete('/:date', ...writeSecurity, asyncHandler(async (request, response) => {
-    await deleteJournal(
-      authenticatedUserId(request),
-      journalDate(request.params.date),
+    const userId = authenticatedUserId(request)
+    const date = journalDate(request.params.date)
+    const result = await deleteJournal(
+      userId,
+      date,
       validateDeleteJournal(request.body),
     )
-    response.status(204).end()
+    if (result.queuedCount === 0) {
+      response.status(204).end()
+      return
+    }
+    const cleanupPending = await cleanupOwnerMedia(mediaStorage, userId, 'journal', date)
+    response.status(cleanupPending ? 202 : 200).json({
+      cleanupStatus: cleanupPending ? 'pending' : 'deleted',
+      queuedCount: result.queuedCount,
+    })
   }))
 
   router.use((error: unknown, _request: Request, response: Response, next: NextFunction) => {

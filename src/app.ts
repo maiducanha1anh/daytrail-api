@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser'
 import { createAuthRouter } from './routes/auth.js'
 import { createJournalRouter } from './routes/journals.js'
 import { createTaskRouter } from './routes/tasks.js'
+import { createImageRouter, createJournalMediaRouter, createTaskMediaRouter } from './routes/media.js'
+import type { MediaStorage } from './media/storage.js'
 import { isDatabaseUnavailableError, safeDatabaseFailureCode } from './database/mongoose.js'
 
 type AppDependencies = {
@@ -12,10 +14,13 @@ type AppDependencies = {
   cookieSecure: boolean
   frontendOrigin: string
   isDatabaseReady: () => Promise<boolean>
+  mediaKeyPrefix?: string
+  mediaStorage?: MediaStorage
+  mediaUploadConcurrency?: number
   sessionTtlMs: number
 }
 
-export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecure, frontendOrigin, isDatabaseReady, sessionTtlMs }: AppDependencies) {
+export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecure, frontendOrigin, isDatabaseReady, mediaKeyPrefix, mediaStorage, mediaUploadConcurrency = 2, sessionTtlMs }: AppDependencies) {
   const app = express()
   app.disable('x-powered-by')
   app.use(cors({
@@ -35,8 +40,12 @@ export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecur
     rateLimitWindowMs: authRateLimitWindowMs,
     sessionTtlMs,
   }))
-  app.use('/api/tasks', createTaskRouter({ frontendOrigin }))
-  app.use('/api/journals', createJournalRouter({ frontendOrigin }))
+  const mediaOptions = { frontendOrigin, keyPrefix: mediaKeyPrefix, storage: mediaStorage, uploadConcurrency: mediaUploadConcurrency }
+  app.use('/api/tasks', createTaskMediaRouter(mediaOptions))
+  app.use('/api/journals', createJournalMediaRouter(mediaOptions))
+  app.use('/api/images', createImageRouter(mediaOptions))
+  app.use('/api/tasks', createTaskRouter({ frontendOrigin, mediaStorage }))
+  app.use('/api/journals', createJournalRouter({ frontendOrigin, mediaStorage }))
   app.use((error: unknown, _request: express.Request, response: express.Response, next: express.NextFunction) => {
     void next
     if (error instanceof SyntaxError && 'status' in error && error.status === 400) {

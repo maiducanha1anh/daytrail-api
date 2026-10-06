@@ -1,4 +1,5 @@
-import { Types } from 'mongoose'
+import mongoose, { Types } from 'mongoose'
+import { queueOwnerMediaDeletion } from '../media/service.js'
 import { Task, type TaskDocument } from '../models/Task.js'
 import { TaskInputError, type CreateTaskInput, type TaskListInput, type TaskSummaryRangeInput, type UpdateTaskInput, validateTimeOrder } from './validation.js'
 
@@ -96,8 +97,21 @@ export async function setTaskCompletion(userId: string, taskId: string, complete
 }
 
 export async function deleteTask(userId: string, taskId: string) {
-  const result = await Task.deleteOne({ _id: taskId, userId: ownerId(userId) })
-  if (result.deletedCount !== 1) throw new TaskNotFoundError('Không tìm thấy công việc.')
+  const userIdValue = ownerId(userId)
+  const session = await mongoose.startSession()
+  try {
+    const queuedCount = await session.withTransaction(async () => {
+      const task = await Task.findOne({ _id: taskId, userId: userIdValue }).session(session)
+      if (!task) throw new TaskNotFoundError('Không tìm thấy công việc.')
+      const queued = await queueOwnerMediaDeletion(session, userIdValue, 'task', taskId, 'task_deleted')
+      await Task.deleteOne({ _id: task._id, userId: userIdValue }).session(session)
+      return queued
+    })
+    if (queuedCount === undefined) throw new Error('Task deletion transaction returned no result')
+    return { queuedCount }
+  } finally {
+    await session.endSession()
+  }
 }
 
 export async function taskSummary(userId: string, date: string) {

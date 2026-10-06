@@ -1,6 +1,8 @@
-import { Types } from 'mongoose'
+import mongoose, { Types } from 'mongoose'
 import { Journal, type JournalDocument } from '../models/Journal.js'
-import { JOURNAL_EXCERPT_MAX_LENGTH, type JournalListInput, type SaveJournalInput } from './validation.js'
+import { MediaAsset } from '../models/MediaAsset.js'
+import { queueOwnerMediaDeletion } from '../media/service.js'
+import { JOURNAL_EXCERPT_MAX_LENGTH, JournalInputError, type JournalListInput, type SaveJournalInput } from './validation.js'
 
 export class JournalNotFoundError extends Error {
   override name = 'JournalNotFoundError'
@@ -40,6 +42,7 @@ export async function getJournal(userId: string, date: string) {
 export async function saveJournal(userId: string, date: string, input: SaveJournalInput) {
   const userIdValue = ownerId(userId)
   if (input.version === null) {
+    if (input.content === '') throw new JournalInputError('Nhật ký không có chữ chỉ được tạo bằng cách upload ảnh đầu tiên.')
     try {
       const journal = await Journal.create({ content: input.content, date, userId: userIdValue })
       return { created: true, journal: publicJournal(journal) }
@@ -47,6 +50,10 @@ export async function saveJournal(userId: string, date: string, input: SaveJourn
       if (isDuplicateKeyError(error)) throw new JournalConflictError('Nhật ký ngày này đã được tạo. Hãy tải lại dữ liệu mới nhất.')
       throw error
     }
+  }
+
+  if (input.content === '' && !await MediaAsset.exists({ userId: userIdValue, ownerType: 'journal', ownerKey: date, status: 'ready' })) {
+    throw new JournalInputError('Nhật ký không có chữ phải còn ít nhất một ảnh.')
   }
 
   const journal = await Journal.findOneAndUpdate(
@@ -63,12 +70,25 @@ export async function saveJournal(userId: string, date: string, input: SaveJourn
 
 export async function deleteJournal(userId: string, date: string, version: number) {
   const userIdValue = ownerId(userId)
-  const journal = await Journal.findOneAndDelete({ userId: userIdValue, date, version })
-  if (journal) return
-  if (await Journal.exists({ userId: userIdValue, date })) {
-    throw new JournalConflictError('Nhật ký đã thay đổi ở nơi khác. Hãy tải lại trước khi xóa.')
+  const session = await mongoose.startSession()
+  try {
+    const queuedCount = await session.withTransaction(async () => {
+      const journal = await Journal.findOne({ userId: userIdValue, date, version }).session(session)
+      if (!journal) {
+        if (await Journal.exists({ userId: userIdValue, date }).session(session)) {
+          throw new JournalConflictError('Nhật ký đã thay đổi ở nơi khác. Hãy tải lại trước khi xóa.')
+        }
+        throw new JournalNotFoundError('Không tìm thấy nhật ký.')
+      }
+      const queued = await queueOwnerMediaDeletion(session, userIdValue, 'journal', date, 'journal_deleted')
+      await Journal.deleteOne({ _id: journal._id, version }).session(session)
+      return queued
+    })
+    if (queuedCount === undefined) throw new Error('Journal deletion transaction returned no result')
+    return { queuedCount }
+  } finally {
+    await session.endSession()
   }
-  throw new JournalNotFoundError('Không tìm thấy nhật ký.')
 }
 
 export async function listJournals(userId: string, input: JournalListInput) {

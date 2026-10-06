@@ -3,10 +3,13 @@ import { requireAuthentication } from '../middleware/authentication.js'
 import { requireAllowedOrigin, requireJson } from '../middleware/requestSecurity.js'
 import { createTaskSeries, getTaskSeries, stopTaskSeries, TaskSeriesNotFoundError } from '../tasks/recurrence.js'
 import { createTask, deleteTask, getTask, listTasks, moveTask, setTaskCompletion, taskSummaries, taskSummary, TaskNotFoundError, updateTask, validateTaskId } from '../tasks/service.js'
+import { cleanupOwnerMedia } from '../media/service.js'
+import type { MediaStorage } from '../media/storage.js'
 import { TaskInputError, validateCompletionChange, validateCreateTask, validateCreateTaskSeries, validateDateChange, validateStopTaskSeries, validateSummaryQuery, validateSummaryRangeQuery, validateTaskListQuery, validateTaskSeriesId, validateTaskUpdate } from '../tasks/validation.js'
 
 type TaskRouterOptions = {
   frontendOrigin: string
+  mediaStorage?: MediaStorage
 }
 
 type AsyncHandler = (request: Request, response: Response) => Promise<void>
@@ -22,7 +25,7 @@ function authenticatedUserId(request: Request) {
   return request.auth.userId
 }
 
-export function createTaskRouter({ frontendOrigin }: TaskRouterOptions) {
+export function createTaskRouter({ frontendOrigin, mediaStorage }: TaskRouterOptions) {
   const router = express.Router()
   const parseJson = express.json({ limit: '32kb' })
   const writeSecurity = [requireAllowedOrigin(frontendOrigin), requireJson, parseJson]
@@ -78,8 +81,18 @@ export function createTaskRouter({ frontendOrigin }: TaskRouterOptions) {
   }))
 
   router.delete('/:id', ...writeSecurity, asyncHandler(async (request, response) => {
-    await deleteTask(authenticatedUserId(request), validateTaskId(request.params.id))
-    response.status(204).end()
+    const userId = authenticatedUserId(request)
+    const taskId = validateTaskId(request.params.id)
+    const result = await deleteTask(userId, taskId)
+    if (result.queuedCount === 0) {
+      response.status(204).end()
+      return
+    }
+    const cleanupPending = await cleanupOwnerMedia(mediaStorage, userId, 'task', taskId)
+    response.status(cleanupPending ? 202 : 200).json({
+      cleanupStatus: cleanupPending ? 'pending' : 'deleted',
+      queuedCount: result.queuedCount,
+    })
   }))
 
   router.use((error: unknown, _request: Request, response: Response, next: NextFunction) => {

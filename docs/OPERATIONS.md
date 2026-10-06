@@ -53,7 +53,7 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 - `DELETE /api/journals/:date`: xóa nhật ký bằng version đã đọc.
 - `GET /api/journals`: danh sách đoạn trích theo khoảng tối đa 366 ngày, có phân trang.
 
-Mọi endpoint công việc và nhật ký yêu cầu session. Các thao tác ghi yêu cầu JSON và Origin hợp lệ; mọi truy vấn/sửa/xóa đều kèm `userId` lấy từ session.
+Mọi endpoint công việc và nhật ký yêu cầu session. Các thao tác ghi hiện có yêu cầu JSON và Origin hợp lệ; mọi truy vấn/sửa/xóa đều kèm `userId` lấy từ session.
 
 Nếu MongoDB mất kết nối sau khi API đã mở cổng, endpoint cần database trả HTTP 503 với `code="DATABASE_UNAVAILABLE"` và `Retry-After: 5`. Đây là lỗi dịch vụ, không phải phiên hết hạn: backend không trả 401 và không xóa cookie. `/api/health` chỉ xác nhận tiến trình Express còn sống; luôn dùng `/api/ready` để kết luận database có sẵn sàng hay không.
 
@@ -72,7 +72,7 @@ cd C:\daytrail-api
 npm test
 ```
 
-Bộ test hiện có 38 test (8 auth, 10 công việc, 10 công việc lặp, 9 nhật ký, 1 lỗi database). Kết quả mong đợi là 38 PASS. Nếu thiếu hoặc sai `MONGODB_TEST_URI`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Bộ test hiện có 46 test: 38 test auth/task/recurrence/journal/database và 8 test media. Kết quả mong đợi là 46 PASS khi Atlas và R2 test đều sẵn sàng. Nếu thiếu/sai `MONGODB_TEST_URI` hoặc bộ biến `R2_TEST_*`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
@@ -90,15 +90,56 @@ Kết quả nghiệm thu:
 
 - API một lần `POST /api/tasks` vẫn chỉ nhận `repeat="none"`; chuỗi lặp dùng endpoint `/api/tasks/series` riêng.
 - Chuỗi chỉ hỗ trợ `daily`, `weekly`, `monthly`, bắt buộc ngày kết thúc và tối đa 366 ngày. Tháng thiếu ngày tương ứng sẽ được bỏ qua.
-- Frontend đã có giao diện tạo/dừng chuỗi và thao tác từng lần. Chưa có sửa hàng loạt quy tắc, ảnh hoặc nhật ký ngày.
-- Backend đã có nhật ký văn bản tối đa 20.000 ký tự. Frontend nhật ký thuộc 4B; ảnh nhật ký thuộc 4C và chưa được triển khai.
+- Frontend đã có giao diện tạo/dừng chuỗi và thao tác từng lần. Chưa có sửa hàng loạt quy tắc chuỗi.
+- Backend đã có ảnh riêng tư cho task/journal ở 4C.1; frontend ảnh thuộc 4C.2 và chưa triển khai.
 - Ngày được lưu dưới dạng lịch địa phương `YYYY-MM-DD`, không đổi sang UTC. Giờ bắt đầu/kết thúc phải cùng ngày và `endTime` phải sau `startTime`.
+
+## Lưu trữ ảnh riêng tư 4C.1
+
+Backend dùng Cloudflare R2 bucket riêng tư: MongoDB chỉ giữ metadata và hàng đợi cleanup; backend xác thực session/chủ sở hữu rồi stream ảnh. Không dùng object public, base64 trong MongoDB, local disk khi deploy hoặc biến `VITE_*`.
+
+Cấu hình thật nằm trong `C:\daytrail-api\.env`; không in hoặc commit file này. Development và test dùng bộ khóa/bucket riêng:
+
+```dotenv
+R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=<development-access-key-id>
+R2_SECRET_ACCESS_KEY=<development-secret-access-key>
+R2_BUCKET=daytrail-media-dev
+R2_TEST_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+R2_TEST_ACCESS_KEY_ID=<test-access-key-id>
+R2_TEST_SECRET_ACCESS_KEY=<test-secret-access-key>
+R2_TEST_BUCKET=daytrail-media-test
+R2_TIMEOUT_MS=20000
+MEDIA_UPLOAD_CONCURRENCY=2
+```
+
+`R2_TEST_BUCKET` bắt buộc đúng `daytrail-media-test`; thiếu một biến test phải dừng, không fallback sang development. Mỗi run dùng prefix `daytrail/test/<run-id>` và chỉ xóa object dưới prefix đó.
+
+Worker cleanup chạy một lượt lúc backend khởi động rồi mỗi 30 giây. Mỗi lượt xử lý tối đa 20 asset đến hạn; lỗi R2 được lưu bằng mã đã che thông tin và retry với backoff. Xóa ảnh/task/journal có thể trả HTTP 202 cùng `cleanupStatus=pending`: dữ liệu đã bị ẩn khỏi API nhưng object đang chờ dọn. Không chạy lệnh xóa toàn bucket.
+
+Nếu thiếu cấu hình R2 development, auth/task/journal vẫn hoạt động; endpoint ảnh trả HTTP 503. Nếu R2 gián đoạn, không tăng timeout hoặc tắt TLS để che lỗi. Kiểm tra biến có tồn tại mà không in giá trị, quyền token trên đúng bucket, rồi thử lại.
+
+### Kiểm thử ảnh
+
+Mở PowerShell tại `C:\daytrail-api` và chạy `npm test`. Trước khi ghi, suite media xác nhận database `daytrail_test`, bucket `daytrail-media-test` và prefix ngẫu nhiên. Suite có test R2 thật cho upload/read/delete và test mô phỏng riêng cho partial upload, delete retry và xóa task trong lúc upload.
+
+Lần kiểm tra 4C.1 hiện tại:
+
+- `typecheck`, `lint` và `build`: PASS.
+- Probe R2 thật upload → read → delete: PASS; prefix probe còn 0 object.
+- Suite media trên `daytrail_test` + `daytrail-media-test`: 8/8 PASS.
+- Toàn bộ backend: 46/46 PASS; con số đúng là 46 tổng và 8 media.
+- Cleanup: 0 user/media marker 4C.1 và 0 object dưới `daytrail/test/`.
+- Các lệnh test trên dùng `NODE_OPTIONS` để nạp `dns.setServers` với resolver công cộng chỉ trong tiến trình. Không đổi DNS Windows, source, URI hoặc TLS. `npm run dev` bình thường trên hotspot chưa được xác nhận hoạt động.
+- Người dùng đã duyệt 4C.1 về backend dựa trên kết quả trên. Chất lượng cảm quan với ảnh chụp điện thoại thật chưa được kiểm chứng và sẽ được thử ở 4C.2; toàn bộ chặng 4C chưa hoàn tất.
+
+Nếu DNS mặc định hotspot vẫn trả `EBADRESP`, chuyển sang mạng có resolver hoạt động hoặc sửa DNS ở cấp mạng theo quyết định của người dùng trước khi chạy development bình thường. Không hardcode resolver vào source.
 
 ## Transaction của chuỗi lặp
 
 Tạo chuỗi ghi `TaskSeries` và toàn bộ `Task` trong cùng MongoDB transaction: nếu một lần chèn thất bại, cả chuỗi và các lần đã chèn đều rollback. Unique partial index theo chuỗi/ngày dự kiến là lớp bảo vệ thứ hai chống trùng. Đọc lịch hoặc khởi động lại backend không sinh thêm dữ liệu.
 
-Dừng chuỗi cũng dùng transaction. Backend cập nhật `stoppedFromDate` và xóa các lần đủ điều kiện trong cùng một lần ghi nhất quán. Việc lọc dùng `originalDate`, nên công việc đã chuyển ngày vẫn thuộc đúng vị trí lịch gốc khi dừng.
+Dừng chuỗi cũng dùng transaction. Backend cập nhật `stoppedFromDate` và xóa các lần đủ điều kiện trong cùng một lần ghi nhất quán. Việc lọc dùng `originalDate`, nên công việc đã chuyển ngày vẫn thuộc đúng vị trí lịch gốc khi dừng. Lần có asset ảnh đang hoạt động được giữ lại giống lần có note hoặc đã hoàn thành.
 
 ## Bảo mật phiên đăng nhập
 

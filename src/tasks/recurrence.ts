@@ -2,6 +2,7 @@ import mongoose, { Types } from 'mongoose'
 import { Task } from '../models/Task.js'
 import { TaskSeries, type TaskSeriesDocument } from '../models/TaskSeries.js'
 import { dateDayNumber, TaskInputError, type CreateTaskSeriesInput } from './validation.js'
+import { taskOwnerKeysWithActiveMedia } from '../media/service.js'
 
 const DAY_MS = 86_400_000
 
@@ -129,8 +130,9 @@ export async function stopTaskSeries(userId: string, seriesId: string, requested
         seriesId: series._id,
         originalDate: { $gte: fromDate },
       }).session(session)
+      const mediaOwnerKeys = await taskOwnerKeysWithActiveMedia(session, owner, occurrences.map((task) => task._id))
       const removableIds = occurrences
-        .filter((task) => !task.completed && task.note === null)
+        .filter((task) => !task.completed && task.note === null && !mediaOwnerKeys.has(task._id.toString()))
         .map((task) => task._id)
       if (removableIds.length > 0) {
         await Task.deleteMany({ _id: { $in: removableIds }, userId: owner, seriesId: series._id }).session(session)

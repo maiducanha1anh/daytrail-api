@@ -12,7 +12,7 @@ export type JournalRecord = {
 const journalSchema = new mongoose.Schema<JournalRecord>({
   userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'User' },
   date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
-  content: { type: String, required: true, maxlength: 20_000 },
+  content: { type: String, default: '', maxlength: 20_000 },
   version: { type: Number, required: true, default: 1, min: 1 },
 }, {
   timestamps: true,

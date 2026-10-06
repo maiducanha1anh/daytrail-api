@@ -87,7 +87,7 @@ export function validateSaveJournal(value: unknown): SaveJournalInput {
   const body = record(value)
   rejectUnknownFields(body, ['content', 'version'])
   if (!('content' in body) || typeof body.content !== 'string') throw new JournalInputError('content phải là chuỗi.')
-  if (!body.content.trim()) throw new JournalInputError('content không được chỉ chứa khoảng trắng.')
+  if (body.content !== '' && !body.content.trim()) throw new JournalInputError('content không được chỉ chứa khoảng trắng.')
   if (body.content.length > JOURNAL_CONTENT_MAX_LENGTH) {
     throw new JournalInputError(`content không được vượt quá ${JOURNAL_CONTENT_MAX_LENGTH} ký tự.`)
   }

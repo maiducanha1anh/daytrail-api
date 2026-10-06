@@ -1,6 +1,6 @@
 # DayTrail API
 
-Backend Express + TypeScript của DayTrail. Phần tài khoản, phiên, công việc theo ngày, tổng quan Lịch, chuỗi lặp hữu hạn và API nhật ký văn bản theo ngày đã hoàn thành. Frontend nhật ký và ảnh chưa được triển khai.
+Backend Express + TypeScript của DayTrail. Phần tài khoản, công việc, chuỗi lặp và nhật ký văn bản đã hoạt động. Backend ảnh riêng tư 4C.1 qua Cloudflare R2 đã kiểm chứng kỹ thuật và được người dùng duyệt về backend; giao diện ảnh thuộc 4C.2 chưa triển khai nên toàn bộ chặng 4C chưa hoàn tất.
 
 ## Chuẩn bị trên Windows
 
@@ -39,9 +39,19 @@ MONGODB_PING_TIMEOUT_MS=3000
 SESSION_TTL_DAYS=7
 AUTH_RATE_LIMIT_WINDOW_MS=900000
 AUTH_RATE_LIMIT_MAX=10
+R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=<development-access-key-id>
+R2_SECRET_ACCESS_KEY=<development-secret-access-key>
+R2_BUCKET=daytrail-media-dev
+R2_TEST_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+R2_TEST_ACCESS_KEY_ID=<test-access-key-id>
+R2_TEST_SECRET_ACCESS_KEY=<test-secret-access-key>
+R2_TEST_BUCKET=daytrail-media-test
+R2_TIMEOUT_MS=20000
+MEDIA_UPLOAD_CONCURRENCY=2
 ```
 
-Database user dùng cho test chỉ cần quyền `readWrite` trên `daytrail_test`. Không dùng database `daytrail` để chạy integration test (kiểm thử tích hợp qua API và database thật).
+Database user dùng cho test chỉ cần quyền `readWrite` trên `daytrail_test`. Test ảnh chỉ chấp nhận bucket `daytrail-media-test` và không fallback sang khóa/bucket development. Không dùng database `daytrail` hoặc bucket `daytrail-media-dev` để chạy integration test.
 
 ## Kiểm tra và chạy
 
@@ -60,7 +70,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` chạy trên `daytrail_test`. Bộ test hiện có 38 test: 8 auth, 10 công việc, 10 công việc lặp, 9 nhật ký và 1 test xác nhận lỗi database trả 503 thay vì 401. Codex chạy trong chặng 4A: 38 PASS, 0 fail/cancelled/skipped/todo.
+- `npm test` gồm 46 test: 38 test auth/task/recurrence/journal/database và 8 test media. Lần kiểm chứng 4C.1 bằng DNS tạm chỉ trong tiến trình: 46 PASS, 0 fail/cancelled/skipped/todo. Suite xác nhận đúng `daytrail_test` cùng `daytrail-media-test` trước khi ghi và chỉ dọn marker/prefix của lần chạy.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
@@ -146,7 +156,17 @@ cd C:\daytrail-web
 npm run dev
 ```
 
-Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay, bốn chế độ Lịch và công việc lặp hữu hạn đã có. Backend nhật ký văn bản đã có nhưng giao diện nhật ký và ảnh chưa được triển khai.
+Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay, bốn chế độ Lịch, công việc lặp hữu hạn và nhật ký văn bản đã có. Backend ảnh 4C.1 đã được triển khai nhưng frontend chưa có nút chọn/xem ảnh; phần đó thuộc 4C.2.
+
+## Backend ảnh riêng tư
+
+- Mỗi task hoặc journal có tối đa 12 ảnh; input tối đa 8 MiB; chỉ nhận JPEG, PNG và WebP tĩnh.
+- Backend kiểm tra bytes/giải mã, xoay orientation, bỏ metadata, tạo WebP full tối đa 2.560 px và thumbnail tối đa 480 px. Bucket R2 luôn private; client chỉ đọc qua endpoint có session.
+- Thiếu cấu hình R2 không làm hỏng auth/task/journal. Chỉ endpoint ảnh trả HTTP 503 với mã `MEDIA_STORAGE_UNAVAILABLE`.
+- Biến `R2_*` chỉ đặt trong backend. Không đưa access key/secret vào frontend, tài liệu, log hay Git.
+- Contract upload/list/read/caption/delete nằm tại `C:\daytrail-web\docs\API_CONTRACT.md`; cách kiểm tra và cleanup nằm trong [OPERATIONS](docs/OPERATIONS.md).
+- Trên hotspot đã kiểm tra, DNS mặc định của Node còn trả `EBADRESP`; `npm run dev` bình thường chưa được xác nhận. DNS công cộng chỉ được nạp tạm trong tiến trình test, không nằm trong source.
+- Chất lượng cảm quan với ảnh chụp điện thoại thật chưa được kiểm chứng; sẽ được thử cùng giao diện ở 4C.2.
 
 ## Thử API nhật ký
 
