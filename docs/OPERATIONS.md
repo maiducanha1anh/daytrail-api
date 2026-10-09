@@ -72,7 +72,7 @@ cd C:\daytrail-api
 npm test
 ```
 
-Bộ test hiện có 46 test: 38 test auth/task/recurrence/journal/database và 8 test media. Kết quả mong đợi là 46 PASS khi Atlas và R2 test đều sẵn sàng. Nếu thiếu/sai `MONGODB_TEST_URI` hoặc bộ biến `R2_TEST_*`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Bộ test hiện có 54 test: 46 test auth/task/recurrence/journal/database/media và 8 test Album ký ức. Kết quả mong đợi là 54 PASS khi Atlas và R2 test đều sẵn sàng. Nếu thiếu/sai `MONGODB_TEST_URI` hoặc bộ biến `R2_TEST_*`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
@@ -85,13 +85,15 @@ Kết quả nghiệm thu:
 - Kiểm chứng chặng 3B.1: Codex chạy 29/29 test PASS trên `daytrail_test`. Suite recurrence kiểm tra ngày/tuần/tháng, 29/30/31, năm nhuận, giao năm, giới hạn 366 ngày, độc lập từng lần, dừng chuỗi, cách ly tài khoản, không đếm đôi và rollback transaction.
 - Kiểm chứng chặng 3B.2: Codex chạy lại 29/29 test PASS; test đọc metadata chuỗi xác nhận đúng chủ sở hữu. Browser test riêng dùng 4015/5176 và `daytrail_test`; dữ liệu test được xóa theo đúng user marker.
 - Kiểm chứng chặng 4A: Codex chạy 38/38 test PASS trên `daytrail_test`. Suite nhật ký 9/9 PASS, gồm tạo/đọc/sửa/xóa, xung đột version, hai request tạo đồng thời, phân trang, đoạn trích, cách ly tài khoản và cleanup theo user marker.
+- Kiểm chứng kỹ thuật chặng 5 Album ký ức: Codex chạy toàn bộ **54/54 test PASS** bằng DNS mặc định trên `daytrail_test` và `daytrail-media-test`; riêng suite Album 8/8 PASS. Test bao phủ loại trừ task/ảnh task, chọn 6 ngày ổn định, bìa thủ công/tự động và fallback, phân trang, cách ly tài khoản, giai đoạn dài hơn 366 ngày và dọn tham chiếu khi nguồn bị xóa.
 
 ## Giới hạn công việc hiện tại
 
 - API một lần `POST /api/tasks` vẫn chỉ nhận `repeat="none"`; chuỗi lặp dùng endpoint `/api/tasks/series` riêng.
 - Chuỗi chỉ hỗ trợ `daily`, `weekly`, `monthly`, bắt buộc ngày kết thúc và tối đa 366 ngày. Tháng thiếu ngày tương ứng sẽ được bỏ qua.
 - Frontend đã có giao diện tạo/dừng chuỗi và thao tác từng lần. Chưa có sửa hàng loạt quy tắc chuỗi.
-- Backend đã có ảnh riêng tư cho task/journal ở 4C.1; frontend ảnh thuộc 4C.2 và chưa triển khai.
+- Ảnh private cho task/journal và giao diện 4C.2 đã nghiệm thu trên máy tính; điện thoại thật và chất lượng ảnh điện thoại vẫn phải kiểm tra trước phát hành.
+- Hành trình đã được thiết kế lại thành Album ký ức Năm/Tháng/Tuần/Ngày chỉ dùng journal/ảnh journal, có highlight, tiêu đề/bìa tháng và giai đoạn; chưa có hồ sơ, video, chia sẻ hoặc AI.
 - Ngày được lưu dưới dạng lịch địa phương `YYYY-MM-DD`, không đổi sang UTC. Giờ bắt đầu/kết thúc phải cùng ngày và `endTime` phải sau `startTime`.
 
 ## Lưu trữ ảnh riêng tư 4C.1

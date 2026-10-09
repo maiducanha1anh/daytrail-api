@@ -1,6 +1,7 @@
 import mongoose, { Types } from 'mongoose'
 import { Journal, type JournalDocument } from '../models/Journal.js'
 import { MediaAsset } from '../models/MediaAsset.js'
+import { JourneyHighlight } from '../models/JourneyHighlight.js'
 import { queueOwnerMediaDeletion } from '../media/service.js'
 import { JOURNAL_EXCERPT_MAX_LENGTH, JournalInputError, type JournalListInput, type SaveJournalInput } from './validation.js'
 
@@ -81,6 +82,7 @@ export async function deleteJournal(userId: string, date: string, version: numbe
         throw new JournalNotFoundError('Không tìm thấy nhật ký.')
       }
       const queued = await queueOwnerMediaDeletion(session, userIdValue, 'journal', date, 'journal_deleted')
+      await JourneyHighlight.deleteMany({ userId: userIdValue, sourceType: 'journal', sourceId: journal._id }).session(session)
       await Journal.deleteOne({ _id: journal._id, version }).session(session)
       return queued
     })

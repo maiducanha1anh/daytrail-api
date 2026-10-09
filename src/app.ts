@@ -3,6 +3,7 @@ import express from 'express'
 import cookieParser from 'cookie-parser'
 import { createAuthRouter } from './routes/auth.js'
 import { createJournalRouter } from './routes/journals.js'
+import { createJourneyRouter } from './routes/journey.js'
 import { createTaskRouter } from './routes/tasks.js'
 import { createImageRouter, createJournalMediaRouter, createTaskMediaRouter } from './routes/media.js'
 import type { MediaStorage } from './media/storage.js'
@@ -44,6 +45,7 @@ export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecur
   app.use('/api/tasks', createTaskMediaRouter(mediaOptions))
   app.use('/api/journals', createJournalMediaRouter(mediaOptions))
   app.use('/api/images', createImageRouter(mediaOptions))
+  app.use('/api/journey', createJourneyRouter(frontendOrigin))
   app.use('/api/tasks', createTaskRouter({ frontendOrigin, mediaStorage }))
   app.use('/api/journals', createJournalRouter({ frontendOrigin, mediaStorage }))
   app.use((error: unknown, _request: express.Request, response: express.Response, next: express.NextFunction) => {

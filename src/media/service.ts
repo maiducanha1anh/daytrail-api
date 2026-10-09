@@ -1,6 +1,9 @@
 import mongoose, { type ClientSession, Types } from 'mongoose'
 import { Journal } from '../models/Journal.js'
+import { JourneyAlbum } from '../models/JourneyAlbum.js'
 import { MediaAsset, type MediaAssetDocument, type MediaOwnerType } from '../models/MediaAsset.js'
+import { JourneyHighlight } from '../models/JourneyHighlight.js'
+import { JourneyPhase } from '../models/JourneyPhase.js'
 import { Task } from '../models/Task.js'
 import {
   MediaConflictError,
@@ -41,7 +44,7 @@ function isDuplicateKeyError(error: unknown) {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 11000)
 }
 
-function publicMedia(media: MediaAssetDocument) {
+export function publicMedia(media: MediaAssetDocument) {
   return {
     id: media._id.toString(),
     byteSize: media.byteSize,
@@ -418,6 +421,7 @@ export async function deleteMedia(storage: MediaStorage, userId: string, imageId
           status: 'ready',
         }).session(session)
         if (!anotherImage && journal.content === '') {
+          await JourneyHighlight.deleteMany({ userId: userIdValue, sourceType: 'journal', sourceId: journal._id }).session(session)
           await Journal.deleteOne({ _id: journal._id, version: input.journalVersion }).session(session)
           journalVersion = null
         } else {
@@ -433,6 +437,16 @@ export async function deleteMedia(storage: MediaStorage, userId: string, imageId
       media.cleanupReason = 'asset_deleted'
       media.nextCleanupAt = new Date()
       await media.save({ session })
+      await JourneyPhase.updateMany(
+        { userId: userIdValue, coverImageId: media._id },
+        { $set: { coverImageId: null } },
+        { session },
+      )
+      await JourneyAlbum.updateMany(
+        { userId: userIdValue, coverImageId: media._id },
+        { $set: { coverImageId: null } },
+        { session },
+      )
       return true
     })
     if (!result) throw new Error('Media deletion transaction returned no result')
@@ -453,6 +467,24 @@ export async function queueOwnerMediaDeletion(
   reason: string,
 ) {
   const now = new Date()
+  const affectedMediaIds = (await MediaAsset.distinct('_id', {
+    userId,
+    ownerType,
+    ownerKey,
+    status: { $in: ACTIVE_STATUSES },
+  }).session(session)).map((id) => new Types.ObjectId(String(id)))
+  if (affectedMediaIds.length > 0) {
+    await JourneyPhase.updateMany(
+      { userId, coverImageId: { $in: affectedMediaIds } },
+      { $set: { coverImageId: null } },
+      { session },
+    )
+    await JourneyAlbum.updateMany(
+      { userId, coverImageId: { $in: affectedMediaIds } },
+      { $set: { coverImageId: null } },
+      { session },
+    )
+  }
   const ready = await MediaAsset.updateMany(
     { userId, ownerType, ownerKey, status: 'ready' },
     { $set: { cleanupReason: reason, nextCleanupAt: now, status: 'deleting' } },

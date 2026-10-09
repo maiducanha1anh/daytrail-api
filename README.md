@@ -1,6 +1,6 @@
 # DayTrail API
 
-Backend Express + TypeScript của DayTrail. Phần tài khoản, công việc, chuỗi lặp và nhật ký văn bản đã hoạt động. Backend ảnh riêng tư 4C.1 qua Cloudflare R2 đã kiểm chứng kỹ thuật và được người dùng duyệt về backend; giao diện ảnh thuộc 4C.2 chưa triển khai nên toàn bộ chặng 4C chưa hoàn tất.
+Backend Express + TypeScript của DayTrail. Phần tài khoản, công việc, chuỗi lặp, nhật ký và ảnh riêng tư qua Cloudflare R2 đã hoạt động. Chặng 4C.2 đã được người dùng duyệt trên máy tính; kiểm thử điện thoại thật và chất lượng ảnh chụp điện thoại vẫn là checklist bắt buộc trước phát hành. Album ký ức của Hành trình đã được kiểm chứng và người dùng duyệt trên máy tính.
 
 ## Chuẩn bị trên Windows
 
@@ -70,7 +70,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` gồm 46 test: 38 test auth/task/recurrence/journal/database và 8 test media. Lần kiểm chứng 4C.1 bằng DNS tạm chỉ trong tiến trình: 46 PASS, 0 fail/cancelled/skipped/todo. Suite xác nhận đúng `daytrail_test` cùng `daytrail-media-test` trước khi ghi và chỉ dọn marker/prefix của lần chạy.
+- `npm test` gồm 54 test: 46 test auth/task/recurrence/journal/database/media và 8 test Album ký ức. Codex đã chạy đủ **54/54 PASS** trên source cuối. Suite xác nhận đúng `daytrail_test` cùng `daytrail-media-test` trước khi ghi và chỉ dọn marker/prefix của lần chạy.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
@@ -156,7 +156,17 @@ cd C:\daytrail-web
 npm run dev
 ```
 
-Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay, bốn chế độ Lịch, công việc lặp hữu hạn và nhật ký văn bản đã có. Backend ảnh 4C.1 đã được triển khai nhưng frontend chưa có nút chọn/xem ảnh; phần đó thuộc 4C.2.
+Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay, bốn chế độ Lịch, công việc lặp hữu hạn, nhật ký, ảnh private và Album ký ức đã có. Người dùng đã thử và duyệt Chặng 5 trên máy tính; điện thoại thật vẫn thuộc checklist trước phát hành.
+
+## API Hành trình
+
+- `GET /api/journey/year/:year` và `GET /api/journey/month/:year/:month` trả tổng quan album gọn, chỉ từ journal và ảnh journal.
+- `GET /api/journey/days` trả ngày theo trang; `GET /api/journey/days/:date` trả nhật ký/ảnh đầy đủ của một ngày; khoảng danh sách tối đa 366 ngày.
+- `PUT /api/journey/albums/:year/:month` lưu tiêu đề/bìa tháng; `GET /api/journey/covers` trả bộ chọn bìa journal phân trang.
+- `POST/DELETE /api/journey/highlights` chỉ đánh dấu hoặc bỏ đánh dấu journal thuộc tài khoản hiện tại.
+- `GET/POST/PATCH/DELETE /api/journey/phases` quản lý giai đoạn cá nhân; `GET /api/journey/phases/:phaseId/days` phân trang nội dung, kể cả giai đoạn dài hơn 366 ngày. Bìa chỉ tham chiếu ảnh journal trong khoảng; xóa giai đoạn không xóa dữ liệu gốc.
+
+Mọi endpoint yêu cầu phiên đăng nhập. Thao tác ghi yêu cầu JSON và Origin hợp lệ. Contract đầy đủ và mã lỗi nằm tại `C:\daytrail-web\docs\API_CONTRACT.md`.
 
 ## Backend ảnh riêng tư
 
@@ -166,7 +176,7 @@ Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay, bốn chế đ
 - Biến `R2_*` chỉ đặt trong backend. Không đưa access key/secret vào frontend, tài liệu, log hay Git.
 - Contract upload/list/read/caption/delete nằm tại `C:\daytrail-web\docs\API_CONTRACT.md`; cách kiểm tra và cleanup nằm trong [OPERATIONS](docs/OPERATIONS.md).
 - Trên hotspot đã kiểm tra, DNS mặc định của Node còn trả `EBADRESP`; `npm run dev` bình thường chưa được xác nhận. DNS công cộng chỉ được nạp tạm trong tiến trình test, không nằm trong source.
-- Chất lượng cảm quan với ảnh chụp điện thoại thật chưa được kiểm chứng; sẽ được thử cùng giao diện ở 4C.2.
+- Chất lượng cảm quan với ảnh chụp điện thoại thật và thao tác trên điện thoại thật chưa được kiểm chứng; đây là checklist bắt buộc trước phát hành.
 
 ## Thử API nhật ký
 

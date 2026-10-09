@@ -1,5 +1,6 @@
 import mongoose, { Types } from 'mongoose'
 import { queueOwnerMediaDeletion } from '../media/service.js'
+import { JourneyHighlight } from '../models/JourneyHighlight.js'
 import { Task, type TaskDocument } from '../models/Task.js'
 import { TaskInputError, type CreateTaskInput, type TaskListInput, type TaskSummaryRangeInput, type UpdateTaskInput, validateTimeOrder } from './validation.js'
 
@@ -104,6 +105,7 @@ export async function deleteTask(userId: string, taskId: string) {
       const task = await Task.findOne({ _id: taskId, userId: userIdValue }).session(session)
       if (!task) throw new TaskNotFoundError('Không tìm thấy công việc.')
       const queued = await queueOwnerMediaDeletion(session, userIdValue, 'task', taskId, 'task_deleted')
+      await JourneyHighlight.deleteMany({ userId: userIdValue, sourceType: 'task', sourceId: task._id }).session(session)
       await Task.deleteOne({ _id: task._id, userId: userIdValue }).session(session)
       return queued
     })
