@@ -5,10 +5,12 @@ import { connectDatabase, DatabaseConnectionError, disconnectDatabase, pingDatab
 import { ensureDatabaseIndexes } from './models/indexes.js'
 import { startMediaCleanupWorker } from './media/service.js'
 import { createR2MediaStorage } from './media/storage.js'
+import { startProfileCleanupWorker } from './profile/service.js'
 
 let server: Server | undefined
 let shuttingDown = false
 let stopMediaCleanupWorker: (() => void) | undefined
+let stopProfileCleanupWorker: (() => void) | undefined
 
 async function shutdown(signal: NodeJS.Signals) {
   if (shuttingDown) return
@@ -20,6 +22,7 @@ async function shutdown(signal: NodeJS.Signals) {
   }, 10_000)
   forceExitTimer.unref()
   stopMediaCleanupWorker?.()
+  stopProfileCleanupWorker?.()
   if (server) {
     await new Promise<void>((resolve, reject) => {
       server?.close((error) => error ? reject(error) : resolve())
@@ -53,7 +56,10 @@ async function start() {
   server = app.listen(config.port, () => console.log(`DayTrail API listening on http://localhost:${config.port}`))
   server.requestTimeout = 30_000
   server.headersTimeout = 35_000
-  if (mediaStorage) stopMediaCleanupWorker = startMediaCleanupWorker(mediaStorage)
+  if (mediaStorage) {
+    stopMediaCleanupWorker = startMediaCleanupWorker(mediaStorage)
+    stopProfileCleanupWorker = startProfileCleanupWorker(mediaStorage)
+  }
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => void shutdown(signal).then(() => process.exit(0)).catch(() => process.exit(1)))
   }

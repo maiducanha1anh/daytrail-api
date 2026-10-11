@@ -72,7 +72,7 @@ cd C:\daytrail-api
 npm test
 ```
 
-Bộ test hiện có 54 test: 46 test auth/task/recurrence/journal/database/media và 8 test Album ký ức. Kết quả mong đợi là 54 PASS khi Atlas và R2 test đều sẵn sàng. Nếu thiếu/sai `MONGODB_TEST_URI` hoặc bộ biến `R2_TEST_*`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Bộ test hiện có 59 test: 54 test auth/task/recurrence/journal/database/media/Album ký ức và 5 test hồ sơ cùng ảnh hồ sơ riêng tư. Kết quả mong đợi là 59 PASS khi Atlas và R2 test đều sẵn sàng. Nếu thiếu/sai `MONGODB_TEST_URI` hoặc bộ biến `R2_TEST_*`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
@@ -86,6 +86,8 @@ Kết quả nghiệm thu:
 - Kiểm chứng chặng 3B.2: Codex chạy lại 29/29 test PASS; test đọc metadata chuỗi xác nhận đúng chủ sở hữu. Browser test riêng dùng 4015/5176 và `daytrail_test`; dữ liệu test được xóa theo đúng user marker.
 - Kiểm chứng chặng 4A: Codex chạy 38/38 test PASS trên `daytrail_test`. Suite nhật ký 9/9 PASS, gồm tạo/đọc/sửa/xóa, xung đột version, hai request tạo đồng thời, phân trang, đoạn trích, cách ly tài khoản và cleanup theo user marker.
 - Kiểm chứng kỹ thuật chặng 5 Album ký ức: Codex chạy toàn bộ **54/54 test PASS** bằng DNS mặc định trên `daytrail_test` và `daytrail-media-test`; riêng suite Album 8/8 PASS. Test bao phủ loại trừ task/ảnh task, chọn 6 ngày ổn định, bìa thủ công/tự động và fallback, phân trang, cách ly tài khoản, giai đoạn dài hơn 366 ngày và dọn tham chiếu khi nguồn bị xóa.
+- Lượt đồng bộ giao diện tham chiếu và **Góc của mình**: Codex chạy toàn bộ **59/59 test PASS**; riêng suite hồ sơ 5/5 PASS trên `daytrail_test` và `daytrail-media-test`. Suite kiểm tra quyền riêng tư, idempotency upload, xử lý orientation/EXIF, cách ly hai tài khoản, xung đột version, giới hạn bốn ảnh trang trí và cleanup ảnh tạm/thay thế.
+- Lượt tích hợp trước deploy ngày 11/10/2026: Codex chạy lại frontend/backend `typecheck`, `lint`, `build` và toàn bộ backend **59/59 test PASS**. Browser thật dùng backend/frontend riêng `4101`/`5183`, MongoDB `daytrail_test`, R2 `daytrail-media-test` và hai context tách cookie; cleanup xác nhận còn 0 bản ghi/object của marker. Kiểm thử điện thoại thật, backup/restore và production smoke test vẫn chưa thực hiện.
 
 ## Giới hạn công việc hiện tại
 
@@ -93,8 +95,14 @@ Kết quả nghiệm thu:
 - Chuỗi chỉ hỗ trợ `daily`, `weekly`, `monthly`, bắt buộc ngày kết thúc và tối đa 366 ngày. Tháng thiếu ngày tương ứng sẽ được bỏ qua.
 - Frontend đã có giao diện tạo/dừng chuỗi và thao tác từng lần. Chưa có sửa hàng loạt quy tắc chuỗi.
 - Ảnh private cho task/journal và giao diện 4C.2 đã nghiệm thu trên máy tính; điện thoại thật và chất lượng ảnh điện thoại vẫn phải kiểm tra trước phát hành.
-- Hành trình đã được thiết kế lại thành Album ký ức Năm/Tháng/Tuần/Ngày chỉ dùng journal/ảnh journal, có highlight, tiêu đề/bìa tháng và giai đoạn; chưa có hồ sơ, video, chia sẻ hoặc AI.
+- Hành trình đã được thiết kế lại thành Album ký ức Năm/Tháng/Tuần/Ngày chỉ dùng journal/ảnh journal, có highlight, tiêu đề/bìa tháng và giai đoạn. Hồ sơ riêng tư **Góc của mình** đã được bổ sung; video, chia sẻ và AI chưa triển khai.
 - Ngày được lưu dưới dạng lịch địa phương `YYYY-MM-DD`, không đổi sang UTC. Giờ bắt đầu/kết thúc phải cùng ngày và `endTime` phải sau `startTime`.
+
+## Chuẩn bị phát hành V1
+
+Checklist trung tâm nằm tại `C:\daytrail-web\docs\RELEASE_CHECKLIST.md`. Trước production phải chạy `typecheck`, `lint`, `build`, toàn bộ `npm test`, kiểm tra `/api/health` và `/api/ready`, rồi diễn tập backup/restore trong môi trường tách biệt.
+
+Chưa có quyết định về phạm vi thùng rác, thời gian giữ, RPO/RTO, hạ tầng/domain hoặc proxy production. Không tự deploy hoặc đặt `NODE_ENV=production` khi chưa có HTTPS, `FRONTEND_ORIGIN` chính xác và cơ chế quản lý secret. Không dùng database/bucket development để diễn tập restore.
 
 ## Lưu trữ ảnh riêng tư 4C.1
 
@@ -118,6 +126,8 @@ MEDIA_UPLOAD_CONCURRENCY=2
 `R2_TEST_BUCKET` bắt buộc đúng `daytrail-media-test`; thiếu một biến test phải dừng, không fallback sang development. Mỗi run dùng prefix `daytrail/test/<run-id>` và chỉ xóa object dưới prefix đó.
 
 Worker cleanup chạy một lượt lúc backend khởi động rồi mỗi 30 giây. Mỗi lượt xử lý tối đa 20 asset đến hạn; lỗi R2 được lưu bằng mã đã che thông tin và retry với backoff. Xóa ảnh/task/journal có thể trả HTTP 202 cùng `cleanupStatus=pending`: dữ liệu đã bị ẩn khỏi API nhưng object đang chờ dọn. Không chạy lệnh xóa toàn bucket.
+
+Ảnh hồ sơ dùng cùng R2 private bucket nhưng có model/prefix riêng, không xuất hiện trong task, journal hoặc Album ký ức. Ảnh vừa upload là ảnh tạm trong tối đa một giờ; lưu hồ sơ sẽ gắn ảnh, còn hủy chỉnh sửa gọi endpoint discard. Worker profile chạy lúc khởi động và theo chu kỳ để retry ảnh tạm/quá hạn hoặc object chưa dọn được. Không xóa object thủ công theo prefix chung.
 
 Nếu thiếu cấu hình R2 development, auth/task/journal vẫn hoạt động; endpoint ảnh trả HTTP 503. Nếu R2 gián đoạn, không tăng timeout hoặc tắt TLS để che lỗi. Kiểm tra biến có tồn tại mà không in giá trị, quyền token trên đúng bucket, rồi thử lại.
 

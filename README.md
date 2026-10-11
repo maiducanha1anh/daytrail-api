@@ -70,7 +70,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` gồm 54 test: 46 test auth/task/recurrence/journal/database/media và 8 test Album ký ức. Codex đã chạy đủ **54/54 PASS** trên source cuối. Suite xác nhận đúng `daytrail_test` cùng `daytrail-media-test` trước khi ghi và chỉ dọn marker/prefix của lần chạy.
+- `npm test` gồm 59 test: 54 test hiện có và 5 test hồ sơ/ảnh hồ sơ riêng tư. Codex đã chạy đủ **59/59 PASS** trên source hiện tại. Suite xác nhận đúng `daytrail_test` cùng `daytrail-media-test` trước khi ghi và chỉ dọn marker/prefix của lần chạy.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
@@ -167,6 +167,15 @@ Mở `http://localhost:5173`. Giao diện tài khoản, Hôm nay, bốn chế đ
 - `GET/POST/PATCH/DELETE /api/journey/phases` quản lý giai đoạn cá nhân; `GET /api/journey/phases/:phaseId/days` phân trang nội dung, kể cả giai đoạn dài hơn 366 ngày. Bìa chỉ tham chiếu ảnh journal trong khoảng; xóa giai đoạn không xóa dữ liệu gốc.
 
 Mọi endpoint yêu cầu phiên đăng nhập. Thao tác ghi yêu cầu JSON và Origin hợp lệ. Contract đầy đủ và mã lỗi nằm tại `C:\daytrail-web\docs\API_CONTRACT.md`.
+
+## API hồ sơ riêng tư
+
+- `GET/PUT /api/profile` đọc và lưu **Góc của mình** bằng `version` để chống ghi đè giữa hai tab.
+- `POST /api/profile/images` upload avatar hoặc ảnh trang trí; `POST /api/profile/images/discard` dọn ảnh tạm khi người dùng hủy.
+- `GET /api/profile/images/:imageId/file` stream ảnh sau khi kiểm tra session và chủ sở hữu. Ảnh hồ sơ không dùng URL public và không xuất hiện trong Album ký ức.
+- Hồ sơ có một avatar, tối đa bốn ảnh trang trí và caption tối đa 200 ký tự. Ảnh dùng cùng pipeline JPEG/PNG/WebP tĩnh tối đa 8 MiB, orientation và loại bỏ EXIF.
+
+Contract body/response và mã lỗi nằm tại `C:\daytrail-web\docs\API_CONTRACT.md`.
 
 ## Backend ảnh riêng tư
 

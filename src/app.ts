@@ -6,6 +6,7 @@ import { createJournalRouter } from './routes/journals.js'
 import { createJourneyRouter } from './routes/journey.js'
 import { createTaskRouter } from './routes/tasks.js'
 import { createImageRouter, createJournalMediaRouter, createTaskMediaRouter } from './routes/media.js'
+import { createProfileRouter } from './routes/profile.js'
 import type { MediaStorage } from './media/storage.js'
 import { isDatabaseUnavailableError, safeDatabaseFailureCode } from './database/mongoose.js'
 
@@ -45,6 +46,7 @@ export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecur
   app.use('/api/tasks', createTaskMediaRouter(mediaOptions))
   app.use('/api/journals', createJournalMediaRouter(mediaOptions))
   app.use('/api/images', createImageRouter(mediaOptions))
+  app.use('/api/profile', createProfileRouter(mediaOptions))
   app.use('/api/journey', createJourneyRouter(frontendOrigin))
   app.use('/api/tasks', createTaskRouter({ frontendOrigin, mediaStorage }))
   app.use('/api/journals', createJournalRouter({ frontendOrigin, mediaStorage }))
@@ -62,7 +64,10 @@ export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecur
       })
       return
     }
-    console.error(`Request failed (${error instanceof Error ? error.name : 'UnknownError'})`)
+    const errorCode = error && typeof error === 'object'
+      ? ('codeName' in error && typeof error.codeName === 'string' ? error.codeName : 'code' in error && typeof error.code === 'number' ? String(error.code) : undefined)
+      : undefined
+    console.error(`Request failed (${error instanceof Error ? error.name : 'UnknownError'}${errorCode ? `:${errorCode}` : ''})`)
     response.status(500).json({ error: 'Đã xảy ra lỗi máy chủ.' })
   })
   return app
