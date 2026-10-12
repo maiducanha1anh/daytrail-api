@@ -32,6 +32,7 @@ Mở `C:\daytrail-api\.env` và điền các giá trị thật. `MONGODB_URI` ph
 PORT=4000
 NODE_ENV=development
 FRONTEND_ORIGIN=http://localhost:5173
+FRONTEND_BASE_URL=http://localhost:5173
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-host>/daytrail?retryWrites=true&w=majority
 MONGODB_TEST_URI=mongodb+srv://<test-username>:<test-password>@<cluster-host>/daytrail_test?retryWrites=true&w=majority
 MONGODB_CONNECT_TIMEOUT_MS=10000
@@ -39,6 +40,15 @@ MONGODB_PING_TIMEOUT_MS=3000
 SESSION_TTL_DAYS=7
 AUTH_RATE_LIMIT_WINDOW_MS=900000
 AUTH_RATE_LIMIT_MAX=10
+EMAIL_COOLDOWN_SECONDS=60
+SMTP_HOST=<smtp-host>
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_REQUIRE_TLS=true
+SMTP_USER=<smtp-user>
+SMTP_PASSWORD=<smtp-password>
+SMTP_FROM=<sender@example.com>
+SMTP_TIMEOUT_MS=10000
 R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
 R2_ACCESS_KEY_ID=<development-access-key-id>
 R2_SECRET_ACCESS_KEY=<development-secret-access-key>
@@ -52,6 +62,8 @@ MEDIA_UPLOAD_CONCURRENCY=2
 ```
 
 Database user dùng cho test chỉ cần quyền `readWrite` trên `daytrail_test`. Test ảnh chỉ chấp nhận bucket `daytrail-media-test` và không fallback sang khóa/bucket development. Không dùng database `daytrail` hoặc bucket `daytrail-media-dev` để chạy integration test.
+
+`FRONTEND_BASE_URL` là địa chỉ được đặt vào link email; production phải dùng HTTPS. Khóa SMTP chỉ nằm ở backend, không đặt trong biến `VITE_*`. Có thể bỏ trống toàn bộ `SMTP_*` khi phát triển không gửi email thật; đăng ký vẫn thành công nhưng response báo email xác minh chưa gửi được, còn endpoint gửi lại trả HTTP 503.
 
 ## Kiểm tra và chạy
 
@@ -70,7 +82,8 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` gồm 59 test: 54 test hiện có và 5 test hồ sơ/ảnh hồ sơ riêng tư. Codex đã chạy đủ **59/59 PASS** trên source hiện tại. Suite xác nhận đúng `daytrail_test` cùng `daytrail-media-test` trước khi ghi và chỉ dọn marker/prefix của lần chạy.
+- `npm test` gồm 69 test: 59 test hiện có và 10 test vòng đời tài khoản. Codex đã chạy đủ **69/69 PASS** trên source hiện tại. Suite xác nhận đúng `daytrail_test` cùng `daytrail-media-test` trước khi ghi và chỉ dọn marker/prefix của lần chạy.
+- Ngày 12/10/2026, người dùng tự thử và duyệt đăng ký/xác minh email, quên/đặt lại mật khẩu và đổi mật khẩu/đăng nhập lại bằng backend thật, `daytrail_test` và Mailpit SMTP cục bộ. Đây là kiểm thử SMTP cục bộ; gửi email Internet và production chưa được kiểm chứng.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:

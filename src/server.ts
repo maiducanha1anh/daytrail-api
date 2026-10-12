@@ -6,6 +6,7 @@ import { ensureDatabaseIndexes } from './models/indexes.js'
 import { startMediaCleanupWorker } from './media/service.js'
 import { createR2MediaStorage } from './media/storage.js'
 import { startProfileCleanupWorker } from './profile/service.js'
+import { createSmtpEmailSender, createUnavailableEmailSender } from './email/sender.js'
 
 let server: Server | undefined
 let shuttingDown = false
@@ -42,10 +43,14 @@ async function start() {
   })
   await ensureDatabaseIndexes()
   const mediaStorage = config.mediaStorage ? createR2MediaStorage(config.mediaStorage) : undefined
+  const emailSender = config.emailSender ? createSmtpEmailSender(config.emailSender) : createUnavailableEmailSender()
   const app = createApp({
     authRateLimitMax: config.authRateLimitMax,
     authRateLimitWindowMs: config.authRateLimitWindowMs,
     cookieSecure: config.cookieSecure,
+    emailCooldownMs: config.emailCooldownMs,
+    emailSender,
+    frontendBaseUrl: config.frontendBaseUrl,
     frontendOrigin: config.frontendOrigin,
     isDatabaseReady: () => pingDatabase(config.mongodbPingTimeoutMs),
     mediaKeyPrefix: config.mediaStorage?.keyPrefix,

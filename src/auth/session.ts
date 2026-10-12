@@ -32,11 +32,12 @@ export function clearSessionCookieOptions(secure: boolean): CookieOptions {
   }
 }
 
-export async function createSession(userId: Types.ObjectId, ttlMs: number) {
+export async function createSession(userId: Types.ObjectId, ttlMs: number, credentialVersion = 0) {
   const token = createSessionToken()
   const expiresAt = new Date(Date.now() + ttlMs)
   const session = await Session.create({
     expiresAt,
+    credentialVersion,
     tokenHash: hashSessionToken(token),
     userId,
   })

@@ -9,11 +9,15 @@ import { createImageRouter, createJournalMediaRouter, createTaskMediaRouter } fr
 import { createProfileRouter } from './routes/profile.js'
 import type { MediaStorage } from './media/storage.js'
 import { isDatabaseUnavailableError, safeDatabaseFailureCode } from './database/mongoose.js'
+import { createUnavailableEmailSender, type EmailSender } from './email/sender.js'
 
 type AppDependencies = {
   authRateLimitMax: number
   authRateLimitWindowMs: number
   cookieSecure: boolean
+  emailCooldownMs?: number
+  emailSender?: EmailSender
+  frontendBaseUrl?: string
   frontendOrigin: string
   isDatabaseReady: () => Promise<boolean>
   mediaKeyPrefix?: string
@@ -22,7 +26,7 @@ type AppDependencies = {
   sessionTtlMs: number
 }
 
-export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecure, frontendOrigin, isDatabaseReady, mediaKeyPrefix, mediaStorage, mediaUploadConcurrency = 2, sessionTtlMs }: AppDependencies) {
+export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecure, emailCooldownMs = 60_000, emailSender = createUnavailableEmailSender(), frontendOrigin, frontendBaseUrl = frontendOrigin, isDatabaseReady, mediaKeyPrefix, mediaStorage, mediaUploadConcurrency = 2, sessionTtlMs }: AppDependencies) {
   const app = express()
   app.disable('x-powered-by')
   app.use(cors({
@@ -37,6 +41,9 @@ export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecur
   })
   app.use('/api/auth', createAuthRouter({
     cookieSecure,
+    emailCooldownMs,
+    emailSender,
+    frontendBaseUrl,
     frontendOrigin,
     rateLimitMax: authRateLimitMax,
     rateLimitWindowMs: authRateLimitWindowMs,

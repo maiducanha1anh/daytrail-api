@@ -2,6 +2,7 @@ import mongoose, { type Model, type Types } from 'mongoose'
 
 export type SessionRecord = {
   createdAt: Date
+  credentialVersion?: number
   expiresAt: Date
   tokenHash: string
   updatedAt: Date
@@ -11,6 +12,7 @@ export type SessionRecord = {
 const sessionSchema = new mongoose.Schema<SessionRecord>({
   tokenHash: { type: String, required: true },
   userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'User' },
+  credentialVersion: { type: Number, default: 0, min: 0 },
   expiresAt: { type: Date, required: true },
 }, {
   timestamps: true,

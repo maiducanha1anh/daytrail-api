@@ -13,6 +13,7 @@ import { User } from './User.js'
 export async function ensureDatabaseIndexes() {
   await Promise.all([
     User.createIndexes(),
+    AccountToken.createIndexes(),
     Session.createIndexes(),
     Task.createIndexes(),
     TaskSeries.createIndexes(),
@@ -25,3 +26,4 @@ export async function ensureDatabaseIndexes() {
     JourneyPhase.createIndexes(),
   ])
 }
+import { AccountToken } from './AccountToken.js'

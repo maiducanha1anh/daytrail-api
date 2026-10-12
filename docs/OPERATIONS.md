@@ -38,6 +38,11 @@ Khi khởi động, backend tạo hoặc kiểm tra:
 - `POST /api/auth/login`: tạo session và cookie `HttpOnly`.
 - `GET /api/auth/me`: đọc user của session hiện tại.
 - `POST /api/auth/logout`: thu hồi session và xóa cookie; gọi lặp lại vẫn an toàn.
+- `POST /api/auth/password-reset/request`: gửi hướng dẫn đặt lại với response trung lập và cooldown theo IP + email.
+- `POST /api/auth/password-reset/confirm`: dùng token một lần, đổi mật khẩu và thu hồi mọi session.
+- `POST /api/auth/password/change`: kiểm tra mật khẩu hiện tại, đổi mật khẩu và yêu cầu đăng nhập lại.
+- `POST /api/auth/email-verification/resend`: gửi lại link xác minh cho session hiện tại.
+- `POST /api/auth/email-verification/confirm`: xác minh bằng token một lần; chỉ POST mới tiêu thụ token.
 - `POST /api/tasks`: tạo công việc một lần.
 - `GET /api/tasks`: danh sách theo một ngày hoặc khoảng ngày có phân trang.
 - `GET /api/tasks/summary`: tổng quan một ngày.
@@ -72,7 +77,7 @@ cd C:\daytrail-api
 npm test
 ```
 
-Bộ test hiện có 59 test: 54 test auth/task/recurrence/journal/database/media/Album ký ức và 5 test hồ sơ cùng ảnh hồ sơ riêng tư. Kết quả mong đợi là 59 PASS khi Atlas và R2 test đều sẵn sàng. Nếu thiếu/sai `MONGODB_TEST_URI` hoặc bộ biến `R2_TEST_*`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Bộ test hiện có 69 test: 59 test auth/task/recurrence/journal/database/media/Album/hồ sơ và 10 test vòng đời tài khoản. Kết quả mong đợi là 69 PASS khi Atlas và R2 test đều sẵn sàng. Nếu thiếu/sai `MONGODB_TEST_URI` hoặc bộ biến `R2_TEST_*`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
@@ -88,6 +93,15 @@ Kết quả nghiệm thu:
 - Kiểm chứng kỹ thuật chặng 5 Album ký ức: Codex chạy toàn bộ **54/54 test PASS** bằng DNS mặc định trên `daytrail_test` và `daytrail-media-test`; riêng suite Album 8/8 PASS. Test bao phủ loại trừ task/ảnh task, chọn 6 ngày ổn định, bìa thủ công/tự động và fallback, phân trang, cách ly tài khoản, giai đoạn dài hơn 366 ngày và dọn tham chiếu khi nguồn bị xóa.
 - Lượt đồng bộ giao diện tham chiếu và **Góc của mình**: Codex chạy toàn bộ **59/59 test PASS**; riêng suite hồ sơ 5/5 PASS trên `daytrail_test` và `daytrail-media-test`. Suite kiểm tra quyền riêng tư, idempotency upload, xử lý orientation/EXIF, cách ly hai tài khoản, xung đột version, giới hạn bốn ảnh trang trí và cleanup ảnh tạm/thay thế.
 - Lượt tích hợp trước deploy ngày 11/10/2026: Codex chạy lại frontend/backend `typecheck`, `lint`, `build` và toàn bộ backend **59/59 test PASS**. Browser thật dùng backend/frontend riêng `4101`/`5183`, MongoDB `daytrail_test`, R2 `daytrail-media-test` và hai context tách cookie; cleanup xác nhận còn 0 bản ghi/object của marker. Kiểm thử điện thoại thật, backup/restore và production smoke test vẫn chưa thực hiện.
+- Chặng 6C ngày 12/10/2026: Codex chạy toàn bộ **69/69 test PASS**; riêng suite vòng đời tài khoản 10/10 PASS trên `daytrail_test`. Browser test dùng email capture nội bộ, không phải SMTP ngoài. Cleanup domain marker xác nhận còn 0 user/session/token/profile.
+- Nghiệm thu người dùng ngày 12/10/2026: ba luồng đăng ký/xác minh email, quên/đặt lại mật khẩu và đổi mật khẩu/đăng nhập lại đều đạt với backend thật, `daytrail_test` và Mailpit chỉ lắng nghe localhost. Cleanup marker `dtacct-20261012-a7f3c2-*` xóa đúng 3 user và 3 bản ghi liên quan; không có object R2 thuộc marker và kiểm tra sau dọn còn 0 user/bản ghi/object. Các cổng SMTP/UI/backend/frontend nghiệm thu đã đóng; script và Mailpit tái sử dụng được giữ ngoài repo. SMTP Internet và production vẫn chưa kiểm chứng.
+
+## Email tài khoản
+
+- Link đặt lại mật khẩu có hiệu lực 30 phút; link xác minh có hiệu lực 24 giờ. MongoDB chỉ giữ hash token và TTL index hỗ trợ dọn token hết hạn.
+- `EMAIL_COOLDOWN_SECONDS` mặc định 60. `SMTP_TIMEOUT_MS` là timeout hữu hạn; không tắt TLS hoặc kiểm tra chứng chỉ để xử lý lỗi gửi mail.
+- Development/test có thể tiêm email sender capture trong tiến trình kiểm thử. Production phải cấu hình `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` và cặp `SMTP_USER`/`SMTP_PASSWORD` nếu nhà cung cấp yêu cầu xác thực.
+- Sau khi điền cấu hình, mở frontend, dùng một tài khoản thử để gửi xác minh và đặt lại mật khẩu. Kết quả mong đợi: nhận cả nội dung text/HTML, link trỏ đúng HTTPS/domain, không lộ mật khẩu/token trong log. Nếu lỗi, kiểm tra mã lỗi SMTP đã che thông tin; không gửi secret hoặc toàn bộ email link khi nhờ hỗ trợ.
 
 ## Giới hạn công việc hiện tại
 

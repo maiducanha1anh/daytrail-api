@@ -19,8 +19,8 @@ export async function requireAuthentication(request: Request, response: Response
       response.status(401).json({ error: UNAUTHORIZED_MESSAGE })
       return
     }
-    const userExists = await User.exists({ _id: session.userId })
-    if (!userExists) {
+    const user = await User.findById(session.userId).select('credentialVersion')
+    if (!user || (user.credentialVersion ?? 0) !== (session.credentialVersion ?? 0)) {
       await Session.deleteOne({ _id: session._id })
       response.status(401).json({ error: UNAUTHORIZED_MESSAGE })
       return

@@ -2,8 +2,10 @@ import mongoose, { type HydratedDocument, type Model } from 'mongoose'
 
 export type UserRecord = {
   createdAt: Date
+  credentialVersion?: number
   displayName: string
   email: string
+  emailVerifiedAt?: Date
   passwordHash: string
   updatedAt: Date
 }
@@ -11,6 +13,8 @@ export type UserRecord = {
 const userSchema = new mongoose.Schema<UserRecord>({
   displayName: { type: String, required: true, trim: true, maxlength: 80 },
   email: { type: String, required: true, trim: true, lowercase: true, maxlength: 254 },
+  emailVerifiedAt: { type: Date },
+  credentialVersion: { type: Number, default: 0, min: 0 },
   passwordHash: { type: String, required: true, select: false },
 }, {
   timestamps: true,

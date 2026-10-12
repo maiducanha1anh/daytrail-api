@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import type { SmtpConfig } from '../email/sender.js'
 
 const DATABASE_NAME = 'daytrail'
 const TEST_DATABASE_NAME = 'daytrail_test'
@@ -32,6 +33,14 @@ function positiveInteger(name: string, fallback: number) {
   return value
 }
 
+function booleanValue(name: string, fallback: boolean) {
+  const raw = process.env[name]?.trim().toLowerCase()
+  if (!raw) return fallback
+  if (raw === 'true') return true
+  if (raw === 'false') return false
+  throw new ConfigurationError(`${name} must be true or false`)
+}
+
 function mongodbUri(variableName: 'MONGODB_URI' | 'MONGODB_TEST_URI', databaseName: string) {
   const value = required(variableName)
   let parsed: URL
@@ -52,6 +61,47 @@ function frontendOrigin() {
     return new URL(value).origin
   } catch {
     throw new ConfigurationError('FRONTEND_ORIGIN is invalid')
+  }
+}
+
+function frontendBaseUrl(nodeEnv: string) {
+  const raw = process.env.FRONTEND_BASE_URL?.trim() || frontendOrigin()
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    throw new ConfigurationError('FRONTEND_BASE_URL is invalid')
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new ConfigurationError('FRONTEND_BASE_URL must not contain credentials, query, or hash')
+  const localHttp = parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)
+  if (parsed.protocol !== 'https:' && !(nodeEnv !== 'production' && localHttp)) {
+    throw new ConfigurationError('FRONTEND_BASE_URL must use https, except localhost in development or test')
+  }
+  return parsed.toString().replace(/\/$/, '')
+}
+
+function optionalSmtpConfig(nodeEnv: string): SmtpConfig | undefined {
+  const host = process.env.SMTP_HOST?.trim()
+  const from = process.env.SMTP_FROM?.trim()
+  const portRaw = process.env.SMTP_PORT?.trim()
+  const user = process.env.SMTP_USER?.trim()
+  const password = process.env.SMTP_PASSWORD
+  const configured = [host, from, portRaw, user, password].some((value) => Boolean(value))
+  if (!configured) return undefined
+  if (!host || !from || !portRaw) throw new ConfigurationError('SMTP_HOST, SMTP_PORT, and SMTP_FROM are required when SMTP is configured')
+  if (Boolean(user) !== Boolean(password)) throw new ConfigurationError('SMTP_USER and SMTP_PASSWORD must be configured together')
+  const port = Number(portRaw)
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new ConfigurationError('SMTP_PORT must be between 1 and 65535')
+  if (!/^\S+@\S+\.\S+$/.test(from)) throw new ConfigurationError('SMTP_FROM must be an email address')
+  return {
+    from,
+    host,
+    password: password || undefined,
+    port,
+    requireTls: booleanValue('SMTP_REQUIRE_TLS', nodeEnv === 'production'),
+    secure: booleanValue('SMTP_SECURE', port === 465),
+    timeoutMs: positiveInteger('SMTP_TIMEOUT_MS', 10_000),
+    user: user || undefined,
   }
 }
 
@@ -110,6 +160,9 @@ export function loadConfig() {
     authRateLimitWindowMs: positiveInteger('AUTH_RATE_LIMIT_WINDOW_MS', 15 * 60 * 1_000),
     cookieSecure: nodeEnv === 'production',
     databaseName: DATABASE_NAME,
+    emailCooldownMs: positiveInteger('EMAIL_COOLDOWN_SECONDS', 60) * 1_000,
+    emailSender: optionalSmtpConfig(nodeEnv),
+    frontendBaseUrl: frontendBaseUrl(nodeEnv),
     frontendOrigin: frontendOrigin(),
     mongodbConnectTimeoutMs: positiveInteger('MONGODB_CONNECT_TIMEOUT_MS', 10_000),
     mongodbPingTimeoutMs: positiveInteger('MONGODB_PING_TIMEOUT_MS', 3_000),
