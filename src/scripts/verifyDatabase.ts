@@ -30,7 +30,7 @@ async function verify() {
       await disconnectDatabase()
     }
   }
-  console.log('MongoDB write/read/delete verification passed (database: daytrail)')
+  console.log(`MongoDB write/read/delete verification passed (database: ${config.databaseName})`)
 }
 
 verify().catch(async (error: unknown) => {

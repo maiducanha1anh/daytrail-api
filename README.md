@@ -26,13 +26,14 @@ Kết quả mong đợi: dependency được cài theo `package-lock.json` và c
 
 ## Cấu hình môi trường
 
-Mở `C:\daytrail-api\.env` và điền các giá trị thật. `MONGODB_URI` phải trỏ đến `/daytrail`; `MONGODB_TEST_URI` phải trỏ đến `/daytrail_test`.
+Mở `C:\daytrail-api\.env` và điền các giá trị thật. `MONGODB_DATABASE` mặc định là `daytrail`; database trong `MONGODB_URI` phải được ghi rõ và khớp chính xác biến này. `MONGODB_TEST_URI` luôn phải trỏ đến `/daytrail_test`.
 
 ```dotenv
 PORT=4000
 NODE_ENV=development
 FRONTEND_ORIGIN=http://localhost:5173
 FRONTEND_BASE_URL=http://localhost:5173
+MONGODB_DATABASE=daytrail
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-host>/daytrail?retryWrites=true&w=majority
 MONGODB_TEST_URI=mongodb+srv://<test-username>:<test-password>@<cluster-host>/daytrail_test?retryWrites=true&w=majority
 MONGODB_CONNECT_TIMEOUT_MS=10000
@@ -119,7 +120,7 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` gồm 81 test: 77 test nghiệp vụ/provider trước đó và 4 test phục vụ frontend production. Codex đã chạy đủ **81/81 PASS** trên source hiện tại. Suite email vẫn dùng mock HTTPS, còn suite media dùng MongoDB/R2 test thật; không gửi email Internet.
+- `npm test` gồm 87 test: 81 test nghiệp vụ/provider/static trước đó và 6 test rào chắn database ứng dụng. Codex đã chạy đủ **87/87 PASS** trên source hiện tại. Suite email vẫn dùng mock HTTPS, còn suite integration chỉ kết nối `daytrail_test` và `daytrail-media-test`; không gửi email Internet hoặc ghi vào `daytrail`/`daytrail_preview`.
 - Ngày 12/10/2026, người dùng tự thử và duyệt đăng ký/xác minh email, quên/đặt lại mật khẩu và đổi mật khẩu/đăng nhập lại bằng backend thật, `daytrail_test` và Mailpit SMTP cục bộ. Đây là kiểm thử SMTP cục bộ; gửi email Internet và production chưa được kiểm chứng.
 - Ngày 13/10/2026, Gmail API đã chấp nhận đúng một email kiểm tra UTF-8 gửi bằng cấu hình tiến trình riêng. Người dùng xác nhận thư vào Inbox và hiển thị đúng tiếng Việt; sau đó đăng ký/xác minh email, quên/đặt lại mật khẩu, đổi mật khẩu, đăng nhập lại và từ chối tái sử dụng liên kết đều đạt trên môi trường local dùng Gmail thật. Đây chưa phải kiểm chứng production; OAuth vẫn ở trạng thái External / Testing.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ lắng nghe `0.0.0.0:4000`. Trình duyệt local vẫn gọi `http://localhost:4000`.
@@ -145,7 +146,7 @@ Health Check Path: /api/ready
 
 Render chỉ liên kết repo backend. `npm run build:render` fetch đúng full SHA frontend trong `render.frontend-lock.mjs`, build bằng lockfile, đặt output vào `render-frontend-dist` và xóa source tạm. Express phục vụ giao diện cùng API trên một origin `https://<ten-dich-vu>.onrender.com`; không cần Static Site hoặc custom domain.
 
-Backend đọc `PORT` do Render cấp, bind `0.0.0.0` và chỉ bật `trust proxy = 1` khi `NODE_ENV=production`. Có thể đặt `HTTP_REQUEST_TIMEOUT_MS=120000` cho bản thử để upload tối đa 8 MiB không bị timeout sớm trên mạng chậm; giới hạn file và timeout R2 vẫn được giữ riêng. Bảng biến, thứ tự tạo dịch vụ, dữ liệu preview và backup/restore nằm trong `C:\daytrail-web\docs\RENDER_PREVIEW.md`. Tài liệu này chưa phải bằng chứng deploy thành công.
+Backend đọc `PORT` do Render cấp, bind `0.0.0.0` và chỉ bật `trust proxy = 1` khi `NODE_ENV=production`. Bản thử đặt `MONGODB_DATABASE=daytrail_preview`, dùng URI có pathname `/daytrail_preview` và database user chỉ có `readWrite` trên database đó. Có thể đặt `HTTP_REQUEST_TIMEOUT_MS=120000` cho upload tối đa 8 MiB trên mạng chậm; giới hạn file và timeout R2 vẫn được giữ riêng. Bảng biến, thứ tự tạo dịch vụ, dữ liệu preview và backup/restore nằm trong `C:\daytrail-web\docs\RENDER_PREVIEW.md`. Tài liệu này chưa phải bằng chứng deploy thành công.
 
 ## Thử API xác thực
 

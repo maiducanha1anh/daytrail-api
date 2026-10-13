@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import type { GmailApiConfig } from '../email/gmailApi.js'
 import type { SmtpConfig } from '../email/sender.js'
 
-const DATABASE_NAME = 'daytrail'
+const DEFAULT_DATABASE_NAME = 'daytrail'
 const TEST_DATABASE_NAME = 'daytrail_test'
 const DAY_MS = 24 * 60 * 60 * 1_000
 const TEST_MEDIA_BUCKET = 'daytrail-media-test'
@@ -48,6 +48,12 @@ function mongodbUri(variableName: 'MONGODB_URI' | 'MONGODB_TEST_URI', databaseNa
   const database = decodeURIComponent(parsed.pathname.replace(/^\/+/, '').split('/')[0] ?? '')
   if (database !== databaseName) throw new ConfigurationError(`${variableName} must target the ${databaseName} database`)
   return value
+}
+
+function applicationDatabaseName() {
+  const databaseName = process.env.MONGODB_DATABASE?.trim() || DEFAULT_DATABASE_NAME
+  if (databaseName === TEST_DATABASE_NAME) throw new ConfigurationError('MONGODB_DATABASE must not target the test database')
+  return databaseName
 }
 
 function frontendOrigin() {
@@ -220,11 +226,12 @@ export function loadConfig() {
   if (port > 65_535) throw new ConfigurationError('PORT must be at most 65535')
   const nodeEnv = process.env.NODE_ENV?.trim() || 'development'
   if (!['development', 'production', 'test'].includes(nodeEnv)) throw new ConfigurationError('NODE_ENV must be development, production, or test')
+  const databaseName = applicationDatabaseName()
   return Object.freeze({
     authRateLimitMax: positiveInteger('AUTH_RATE_LIMIT_MAX', 10),
     authRateLimitWindowMs: positiveInteger('AUTH_RATE_LIMIT_WINDOW_MS', 15 * 60 * 1_000),
     cookieSecure: nodeEnv === 'production',
-    databaseName: DATABASE_NAME,
+    databaseName,
     emailCooldownMs: positiveInteger('EMAIL_COOLDOWN_SECONDS', 60) * 1_000,
     emailProvider: loadEmailProviderConfig(nodeEnv),
     frontendBaseUrl: frontendBaseUrl(nodeEnv),
@@ -235,7 +242,7 @@ export function loadConfig() {
     httpRequestTimeoutMs: positiveInteger('HTTP_REQUEST_TIMEOUT_MS', 30_000),
     mongodbConnectTimeoutMs: positiveInteger('MONGODB_CONNECT_TIMEOUT_MS', 10_000),
     mongodbPingTimeoutMs: positiveInteger('MONGODB_PING_TIMEOUT_MS', 3_000),
-    mongodbUri: mongodbUri('MONGODB_URI', DATABASE_NAME),
+    mongodbUri: mongodbUri('MONGODB_URI', databaseName),
     mediaStorage: optionalMediaStorageConfig(),
     mediaUploadConcurrency: positiveInteger('MEDIA_UPLOAD_CONCURRENCY', 2),
     nodeEnv,

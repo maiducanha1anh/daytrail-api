@@ -16,8 +16,8 @@ Trước khi chạy, cần bảo đảm:
 
 1. Node.js là 22.23.3, c-ares là 1.34.8 hoặc phiên bản tương thích mới hơn.
 2. Atlas IP Access List có IP hiện tại.
-3. Database user có đúng quyền trên `daytrail`.
-4. `.env` có `MONGODB_URI` trỏ đến `/daytrail`; không ghi URI thật vào tài liệu hoặc log chia sẻ.
+3. Database user có đúng quyền trên database khai báo bởi `MONGODB_DATABASE` (mặc định `daytrail`).
+4. `.env` có `MONGODB_URI` ghi rõ pathname database và khớp chính xác `MONGODB_DATABASE`; không ghi URI thật vào tài liệu hoặc log chia sẻ.
 
 Kết quả mong đợi: `db:verify` ghi/đọc/xóa đúng một document tạm, sau đó `npm run dev` báo MongoDB sẵn sàng và API lắng nghe tại cổng đã cấu hình. API chỉ mở cổng sau khi connect và ping thành công.
 
@@ -77,7 +77,7 @@ cd C:\daytrail-api
 npm test
 ```
 
-Bộ test hiện có 69 test: 59 test auth/task/recurrence/journal/database/media/Album/hồ sơ và 10 test vòng đời tài khoản. Kết quả mong đợi là 69 PASS khi Atlas và R2 test đều sẵn sàng. Nếu thiếu/sai `MONGODB_TEST_URI` hoặc bộ biến `R2_TEST_*`, test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
+Bộ test hiện có 87 test. Kết quả mong đợi là 87 PASS khi Atlas và R2 test đều sẵn sàng. Sáu test cấu hình xác nhận mặc định `daytrail`, cho phép `daytrail_preview` khi URI khớp, từ chối URI thiếu/sai database và không cho ứng dụng dùng `daytrail_test`. Nếu thiếu/sai `MONGODB_TEST_URI` hoặc bộ biến `R2_TEST_*`, integration test phải dừng trước khi ghi dữ liệu. Khi lỗi, chỉ gửi phần stack trace đã che thông tin nhạy cảm.
 
 Kết quả nghiệm thu:
 
@@ -96,6 +96,7 @@ Kết quả nghiệm thu:
 - Chặng 6C ngày 12/10/2026: Codex chạy toàn bộ **69/69 test PASS**; riêng suite vòng đời tài khoản 10/10 PASS trên `daytrail_test`. Browser test dùng email capture nội bộ, không phải SMTP ngoài. Cleanup domain marker xác nhận còn 0 user/session/token/profile.
 - Nghiệm thu người dùng ngày 12/10/2026: ba luồng đăng ký/xác minh email, quên/đặt lại mật khẩu và đổi mật khẩu/đăng nhập lại đều đạt với backend thật, `daytrail_test` và Mailpit chỉ lắng nghe localhost. Cleanup marker `dtacct-20261012-a7f3c2-*` xóa đúng 3 user và 3 bản ghi liên quan; không có object R2 thuộc marker và kiểm tra sau dọn còn 0 user/bản ghi/object. Các cổng SMTP/UI/backend/frontend nghiệm thu đã đóng; script và Mailpit tái sử dụng được giữ ngoài repo. SMTP Internet và production vẫn chưa kiểm chứng.
 - Chuẩn bị Gmail API ngày 12–13/10/2026: backend `typecheck`, `lint`, `build` PASS; unit test provider email **8/8 PASS** và toàn bộ backend **77/77 test PASS** trên `daytrail_test`/`daytrail-media-test`. Test mới giải mã MIME và so sánh nguyên văn tiếng Việt của subject, text và HTML cho cả thư xác minh lẫn đặt lại mật khẩu.
+- Chuẩn bị database Render ngày 13/10/2026: backend `typecheck`, `lint`, `build` PASS; toàn bộ **87/87 test PASS**. Guard trước test xác nhận `daytrail_test` và `daytrail-media-test`; không chạy `verifyDatabase.ts`, không kết nối hoặc ghi vào `daytrail`/`daytrail_preview`.
 - Email Internet đầu tiên đến được hộp thư nhưng tiếng Việt thành dấu `?`. Bằng chứng xác nhận nguyên nhân nằm ở lệnh thử dùng Windows PowerShell 5.1: `$OutputEncoding` là `us-ascii`, nên source JavaScript chứa tiếng Việt bị đổi trước khi Node/provider nhận dữ liệu. MIME do provider tạo trực tiếp vẫn có `charset=utf-8`, quoted-printable và subject RFC 2047 đúng. Lượt thử sau dùng dữ liệu Unicode không đi qua pipeline ASCII; Gmail API chấp nhận đúng một request, không retry. Người dùng xác nhận thư mới vào Inbox và hiển thị đúng dấu.
 
 ## Email tài khoản
@@ -137,7 +138,7 @@ Chưa có quyết định về phạm vi thùng rác, thời gian giữ, RPO/RTO
 - Backend dùng `PORT` của Render, bind `0.0.0.0`; `NODE_ENV=production` bật cookie Secure và tin cậy đúng một lớp proxy. Không tự đặt `PORT` trên dashboard.
 - Frontend được fetch theo full SHA trong `render.frontend-lock.mjs`, build rồi phục vụ từ `render-frontend-dist`. Giao diện và `/api` cùng hostname `onrender.com`, không cần custom domain; cookie, CORS và CSRF giữ nguyên rào chắn hiện có.
 - `HTTP_REQUEST_TIMEOUT_MS` mặc định 30 giây ở local; bản thử có upload 8 MiB nên khuyến nghị 120 giây. Không tăng timeout MongoDB/R2 để che lỗi kết nối.
-- Không đưa `MONGODB_TEST_URI` hoặc `R2_TEST_*` lên Render. Dùng Atlas database `daytrail` và bucket R2 private riêng cho preview; allowlist đúng các CIDR outbound hiển thị trong dịch vụ Render.
+- Không đưa `MONGODB_TEST_URI` hoặc `R2_TEST_*` lên Render. Đặt `MONGODB_DATABASE=daytrail_preview`, dùng `MONGODB_URI` có pathname `/daytrail_preview` và database user chỉ có `readWrite` trên database đó. Bucket R2 private cũng phải riêng cho preview; allowlist đúng các CIDR outbound hiển thị trong dịch vụ Render.
 - Free Web Service phục vụ cả HTML và API nên cold start ảnh hưởng toàn bộ website.
 - Cấu hình đầy đủ và thứ tự triển khai nằm tại `C:\daytrail-web\docs\RENDER_PREVIEW.md`. Chưa có dịch vụ hoặc URL online nào được tạo trong lượt chuẩn bị này.
 
