@@ -23,7 +23,7 @@ function actionEmail(input: { actionLabel: string; displayName: string; expires:
 export function passwordResetEmail(displayName: string, to: string, url: string): EmailMessage {
   return {
     ...actionEmail({
-      actionLabel: 'Đặt lại mật khẩu DayTrail',
+      actionLabel: 'Đặt lại mật khẩu',
       displayName,
       expires: 'trong 30 phút',
       introduction: 'DayTrail nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.',
@@ -37,7 +37,7 @@ export function passwordResetEmail(displayName: string, to: string, url: string)
 export function verificationEmail(displayName: string, to: string, url: string): EmailMessage {
   return {
     ...actionEmail({
-      actionLabel: 'Xác minh email DayTrail',
+      actionLabel: 'Xác minh email',
       displayName,
       expires: 'trong 24 giờ',
       introduction: 'Hãy xác minh địa chỉ email để hoàn tất thông tin tài khoản DayTrail.',

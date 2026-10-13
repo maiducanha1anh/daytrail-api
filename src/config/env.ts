@@ -1,4 +1,6 @@
 import 'dotenv/config'
+import { readFileSync } from 'node:fs'
+import type { GmailApiConfig } from '../email/gmailApi.js'
 import type { SmtpConfig } from '../email/sender.js'
 
 const DATABASE_NAME = 'daytrail'
@@ -31,14 +33,6 @@ function positiveInteger(name: string, fallback: number) {
   const value = Number(raw)
   if (!Number.isInteger(value) || value <= 0) throw new ConfigurationError(`${name} must be a positive integer`)
   return value
-}
-
-function booleanValue(name: string, fallback: boolean) {
-  const raw = process.env[name]?.trim().toLowerCase()
-  if (!raw) return fallback
-  if (raw === 'true') return true
-  if (raw === 'false') return false
-  throw new ConfigurationError(`${name} must be true or false`)
 }
 
 function mongodbUri(variableName: 'MONGODB_URI' | 'MONGODB_TEST_URI', databaseName: string) {
@@ -80,15 +74,36 @@ function frontendBaseUrl(nodeEnv: string) {
   return parsed.toString().replace(/\/$/, '')
 }
 
-function optionalSmtpConfig(nodeEnv: string): SmtpConfig | undefined {
-  const host = process.env.SMTP_HOST?.trim()
-  const from = process.env.SMTP_FROM?.trim()
-  const portRaw = process.env.SMTP_PORT?.trim()
-  const user = process.env.SMTP_USER?.trim()
-  const password = process.env.SMTP_PASSWORD
-  const configured = [host, from, portRaw, user, password].some((value) => Boolean(value))
-  if (!configured) return undefined
-  if (!host || !from || !portRaw) throw new ConfigurationError('SMTP_HOST, SMTP_PORT, and SMTP_FROM are required when SMTP is configured')
+export type EmailProviderConfig =
+  | { provider: 'disabled' }
+  | { provider: 'gmail_api'; gmail: GmailApiConfig }
+  | { provider: 'smtp'; smtp: SmtpConfig }
+
+type Environment = Record<string, string | undefined>
+
+function environmentBoolean(environment: Environment, name: string, fallback: boolean) {
+  const raw = environment[name]?.trim().toLowerCase()
+  if (!raw) return fallback
+  if (raw === 'true') return true
+  if (raw === 'false') return false
+  throw new ConfigurationError(`${name} must be true or false`)
+}
+
+function environmentPositiveInteger(environment: Environment, name: string, fallback: number) {
+  const raw = environment[name]?.trim()
+  if (!raw) return fallback
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value <= 0) throw new ConfigurationError(`${name} must be a positive integer`)
+  return value
+}
+
+function configuredSmtp(environment: Environment, nodeEnv: string): SmtpConfig {
+  const host = environment.SMTP_HOST?.trim()
+  const from = environment.SMTP_FROM?.trim()
+  const portRaw = environment.SMTP_PORT?.trim()
+  const user = environment.SMTP_USER?.trim()
+  const password = environment.SMTP_PASSWORD
+  if (!host || !from || !portRaw) throw new ConfigurationError('SMTP_HOST, SMTP_PORT, and SMTP_FROM are required for EMAIL_PROVIDER=smtp')
   if (Boolean(user) !== Boolean(password)) throw new ConfigurationError('SMTP_USER and SMTP_PASSWORD must be configured together')
   const port = Number(portRaw)
   if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new ConfigurationError('SMTP_PORT must be between 1 and 65535')
@@ -98,10 +113,59 @@ function optionalSmtpConfig(nodeEnv: string): SmtpConfig | undefined {
     host,
     password: password || undefined,
     port,
-    requireTls: booleanValue('SMTP_REQUIRE_TLS', nodeEnv === 'production'),
-    secure: booleanValue('SMTP_SECURE', port === 465),
-    timeoutMs: positiveInteger('SMTP_TIMEOUT_MS', 10_000),
+    requireTls: environmentBoolean(environment, 'SMTP_REQUIRE_TLS', nodeEnv === 'production'),
+    secure: environmentBoolean(environment, 'SMTP_SECURE', port === 465),
+    timeoutMs: environmentPositiveInteger(environment, 'SMTP_TIMEOUT_MS', 10_000),
     user: user || undefined,
+  }
+}
+
+function authorizedUserFromFile(path: string) {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    throw new ConfigurationError('GMAIL_AUTHORIZED_USER_FILE could not be read as JSON')
+  }
+  if (!parsed || typeof parsed !== 'object') throw new ConfigurationError('GMAIL_AUTHORIZED_USER_FILE is invalid')
+  const value = parsed as Record<string, unknown>
+  if (value.type !== 'authorized_user' || typeof value.client_id !== 'string' || typeof value.client_secret !== 'string' || typeof value.refresh_token !== 'string') {
+    throw new ConfigurationError('GMAIL_AUTHORIZED_USER_FILE is missing authorized-user credentials')
+  }
+  if (typeof value.scope === 'string' && !value.scope.split(/\s+/).includes('https://www.googleapis.com/auth/gmail.send')) {
+    throw new ConfigurationError('GMAIL_AUTHORIZED_USER_FILE does not include gmail.send')
+  }
+  return { clientId: value.client_id, clientSecret: value.client_secret, refreshToken: value.refresh_token }
+}
+
+export function loadEmailProviderConfig(nodeEnv: string, environment: Environment = process.env): EmailProviderConfig {
+  const provider = environment.EMAIL_PROVIDER?.trim() || 'disabled'
+  if (provider === 'disabled') return { provider }
+  if (provider === 'smtp') return { provider, smtp: configuredSmtp(environment, nodeEnv) }
+  if (provider !== 'gmail_api') throw new ConfigurationError('EMAIL_PROVIDER must be disabled, smtp, or gmail_api')
+
+  const senderEmail = environment.GMAIL_SENDER_EMAIL?.trim()
+  if (!senderEmail || !/^\S+@\S+\.\S+$/.test(senderEmail)) throw new ConfigurationError('GMAIL_SENDER_EMAIL must be an email address')
+  const authorizedUserFile = environment.GMAIL_AUTHORIZED_USER_FILE?.trim()
+  const clientId = environment.GMAIL_OAUTH_CLIENT_ID?.trim()
+  const clientSecret = environment.GMAIL_OAUTH_CLIENT_SECRET
+  const refreshToken = environment.GMAIL_OAUTH_REFRESH_TOKEN
+  const directValues = [clientId, clientSecret, refreshToken]
+  const hasDirectValue = directValues.some(Boolean)
+  if (authorizedUserFile && hasDirectValue) throw new ConfigurationError('Use GMAIL_AUTHORIZED_USER_FILE or direct Gmail OAuth variables, not both')
+  const credentials = authorizedUserFile
+    ? authorizedUserFromFile(authorizedUserFile)
+    : directValues.every(Boolean)
+      ? { clientId: clientId as string, clientSecret: clientSecret as string, refreshToken: refreshToken as string }
+      : undefined
+  if (!credentials) throw new ConfigurationError('Gmail OAuth credentials are incomplete')
+  return {
+    gmail: {
+      ...credentials,
+      senderEmail,
+      timeoutMs: environmentPositiveInteger(environment, 'GMAIL_API_TIMEOUT_MS', 10_000),
+    },
+    provider,
   }
 }
 
@@ -161,7 +225,7 @@ export function loadConfig() {
     cookieSecure: nodeEnv === 'production',
     databaseName: DATABASE_NAME,
     emailCooldownMs: positiveInteger('EMAIL_COOLDOWN_SECONDS', 60) * 1_000,
-    emailSender: optionalSmtpConfig(nodeEnv),
+    emailProvider: loadEmailProviderConfig(nodeEnv),
     frontendBaseUrl: frontendBaseUrl(nodeEnv),
     frontendOrigin: frontendOrigin(),
     mongodbConnectTimeoutMs: positiveInteger('MONGODB_CONNECT_TIMEOUT_MS', 10_000),

@@ -41,6 +41,7 @@ SESSION_TTL_DAYS=7
 AUTH_RATE_LIMIT_WINDOW_MS=900000
 AUTH_RATE_LIMIT_MAX=10
 EMAIL_COOLDOWN_SECONDS=60
+EMAIL_PROVIDER=disabled
 SMTP_HOST=<smtp-host>
 SMTP_PORT=587
 SMTP_SECURE=false
@@ -49,6 +50,12 @@ SMTP_USER=<smtp-user>
 SMTP_PASSWORD=<smtp-password>
 SMTP_FROM=<sender@example.com>
 SMTP_TIMEOUT_MS=10000
+GMAIL_SENDER_EMAIL=<gmail-sender@example.com>
+GMAIL_AUTHORIZED_USER_FILE=<path-to-authorized-user-json>
+GMAIL_OAUTH_CLIENT_ID=<oauth-client-id>
+GMAIL_OAUTH_CLIENT_SECRET=<oauth-client-secret>
+GMAIL_OAUTH_REFRESH_TOKEN=<oauth-refresh-token>
+GMAIL_API_TIMEOUT_MS=10000
 R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
 R2_ACCESS_KEY_ID=<development-access-key-id>
 R2_SECRET_ACCESS_KEY=<development-secret-access-key>
@@ -63,7 +70,36 @@ MEDIA_UPLOAD_CONCURRENCY=2
 
 Database user dùng cho test chỉ cần quyền `readWrite` trên `daytrail_test`. Test ảnh chỉ chấp nhận bucket `daytrail-media-test` và không fallback sang khóa/bucket development. Không dùng database `daytrail` hoặc bucket `daytrail-media-dev` để chạy integration test.
 
-`FRONTEND_BASE_URL` là địa chỉ được đặt vào link email; production phải dùng HTTPS. Khóa SMTP chỉ nằm ở backend, không đặt trong biến `VITE_*`. Có thể bỏ trống toàn bộ `SMTP_*` khi phát triển không gửi email thật; đăng ký vẫn thành công nhưng response báo email xác minh chưa gửi được, còn endpoint gửi lại trả HTTP 503.
+`FRONTEND_BASE_URL` là địa chỉ được đặt vào link email; production phải dùng HTTPS. `EMAIL_PROVIDER` nhận đúng một trong ba giá trị: `disabled`, `smtp` hoặc `gmail_api`. Backend không tự fallback sang provider khác khi gửi lỗi. SMTP/Mailpit dùng `EMAIL_PROVIDER=smtp`; Gmail API dùng HTTPS với `EMAIL_PROVIDER=gmail_api`. Mọi client secret và refresh token chỉ nằm ở backend, không đặt trong biến `VITE_*`.
+
+Với Gmail API, chọn đúng một cách nạp bí mật:
+
+- `GMAIL_AUTHORIZED_USER_FILE`: file JSON bí mật chứa OAuth client và refresh token; phù hợp máy Windows hoặc Render Secret File.
+- Hoặc ba environment secret `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET`, `GMAIL_OAUTH_REFRESH_TOKEN`; phù hợp Render Environment Variables.
+
+Không cấu hình đồng thời hai cách. `GMAIL_SENDER_EMAIL` là địa chỉ gửi cố định; request của người dùng không được thay đổi trường From.
+
+## Cấp quyền Gmail trên Windows
+
+Công cụ quản trị chỉ chạy thủ công, mở trình duyệt hệ thống và nhận callback trên một cổng ngẫu nhiên chỉ bind `127.0.0.1`. Công cụ dùng state, PKCE, xin duy nhất scope `gmail.send`, yêu cầu offline access và từ chối ghi đè file token đã tồn tại.
+
+Mở PowerShell tại `C:\daytrail-api` rồi chạy:
+
+```powershell
+npm run gmail:authorize -- --client "C:\daytrail-secrets\gmail-oauth-client.json" --output "C:\daytrail-secrets\gmail-authorized-user.json"
+```
+
+Trong trình duyệt:
+
+1. Chọn đúng Gmail đã được thêm vào **Test users** của project `daytrail-mail`.
+2. Kiểm tra màn hình chỉ yêu cầu quyền gửi email thay mặt tài khoản, tương ứng scope `https://www.googleapis.com/auth/gmail.send`; không chấp nhận nếu xuất hiện quyền đọc hộp thư.
+3. Tự bấm cho phép. Công cụ không vượt cảnh báo hoặc chặn của Google.
+
+Kết quả mong đợi: PowerShell chỉ báo đã lưu file authorized-user, không in authorization code, access token, refresh token hay client secret. File đầu ra nằm ngoài repo và được giới hạn ACL cho tài khoản Windows hiện tại. Nếu file đầu ra đã tồn tại, công cụ dừng để tránh ghi đè. Nếu Google không trả refresh token, thu hồi quyền cũ của ứng dụng trong trang quản lý tài khoản Google, sao lưu/đổi tên file cũ nếu có rồi chạy lại.
+
+OAuth consent hiện là **External / Testing**. Với scope Gmail, refresh token thử nghiệm có thể hết hạn sau 7 ngày; khi gặp mã an toàn `GMAIL_INVALID_GRANT`, cấp quyền lại và thay secret/token ngoài repo. Chưa được mô tả trạng thái này là Production hoặc token lâu dài.
+
+Trên Render, không phụ thuộc đường dẫn Windows: dùng ba environment secret trực tiếp hoặc tạo Secret File từ nội dung authorized-user và đặt `GMAIL_AUTHORIZED_USER_FILE` thành đường dẫn Render cung cấp. Không commit file này.
 
 ## Kiểm tra và chạy
 
@@ -82,8 +118,9 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` gồm 69 test: 59 test hiện có và 10 test vòng đời tài khoản. Codex đã chạy đủ **69/69 PASS** trên source hiện tại. Suite xác nhận đúng `daytrail_test` cùng `daytrail-media-test` trước khi ghi và chỉ dọn marker/prefix của lần chạy.
+- `npm test` gồm 77 test: 69 test trước đó và 8 test provider email/Gmail API. Codex đã chạy đủ **77/77 PASS** trên source hiện tại. Suite email giải mã MIME rồi so sánh nguyên văn subject, text và HTML tiếng Việt của cả thư xác minh lẫn đặt lại mật khẩu; các test tự động vẫn dùng mock HTTPS và không gửi email Internet.
 - Ngày 12/10/2026, người dùng tự thử và duyệt đăng ký/xác minh email, quên/đặt lại mật khẩu và đổi mật khẩu/đăng nhập lại bằng backend thật, `daytrail_test` và Mailpit SMTP cục bộ. Đây là kiểm thử SMTP cục bộ; gửi email Internet và production chưa được kiểm chứng.
+- Ngày 13/10/2026, Gmail API đã chấp nhận đúng một email kiểm tra UTF-8 gửi bằng cấu hình tiến trình riêng. Người dùng xác nhận thư vào Inbox và hiển thị đúng tiếng Việt; sau đó đăng ký/xác minh email, quên/đặt lại mật khẩu, đổi mật khẩu, đăng nhập lại và từ chối tái sử dụng liên kết đều đạt trên môi trường local dùng Gmail thật. Đây chưa phải kiểm chứng production; OAuth vẫn ở trạng thái External / Testing.
 - `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:

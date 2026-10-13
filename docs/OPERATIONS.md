@@ -95,13 +95,26 @@ Kết quả nghiệm thu:
 - Lượt tích hợp trước deploy ngày 11/10/2026: Codex chạy lại frontend/backend `typecheck`, `lint`, `build` và toàn bộ backend **59/59 test PASS**. Browser thật dùng backend/frontend riêng `4101`/`5183`, MongoDB `daytrail_test`, R2 `daytrail-media-test` và hai context tách cookie; cleanup xác nhận còn 0 bản ghi/object của marker. Kiểm thử điện thoại thật, backup/restore và production smoke test vẫn chưa thực hiện.
 - Chặng 6C ngày 12/10/2026: Codex chạy toàn bộ **69/69 test PASS**; riêng suite vòng đời tài khoản 10/10 PASS trên `daytrail_test`. Browser test dùng email capture nội bộ, không phải SMTP ngoài. Cleanup domain marker xác nhận còn 0 user/session/token/profile.
 - Nghiệm thu người dùng ngày 12/10/2026: ba luồng đăng ký/xác minh email, quên/đặt lại mật khẩu và đổi mật khẩu/đăng nhập lại đều đạt với backend thật, `daytrail_test` và Mailpit chỉ lắng nghe localhost. Cleanup marker `dtacct-20261012-a7f3c2-*` xóa đúng 3 user và 3 bản ghi liên quan; không có object R2 thuộc marker và kiểm tra sau dọn còn 0 user/bản ghi/object. Các cổng SMTP/UI/backend/frontend nghiệm thu đã đóng; script và Mailpit tái sử dụng được giữ ngoài repo. SMTP Internet và production vẫn chưa kiểm chứng.
+- Chuẩn bị Gmail API ngày 12–13/10/2026: backend `typecheck`, `lint`, `build` PASS; unit test provider email **8/8 PASS** và toàn bộ backend **77/77 test PASS** trên `daytrail_test`/`daytrail-media-test`. Test mới giải mã MIME và so sánh nguyên văn tiếng Việt của subject, text và HTML cho cả thư xác minh lẫn đặt lại mật khẩu.
+- Email Internet đầu tiên đến được hộp thư nhưng tiếng Việt thành dấu `?`. Bằng chứng xác nhận nguyên nhân nằm ở lệnh thử dùng Windows PowerShell 5.1: `$OutputEncoding` là `us-ascii`, nên source JavaScript chứa tiếng Việt bị đổi trước khi Node/provider nhận dữ liệu. MIME do provider tạo trực tiếp vẫn có `charset=utf-8`, quoted-printable và subject RFC 2047 đúng. Lượt thử sau dùng dữ liệu Unicode không đi qua pipeline ASCII; Gmail API chấp nhận đúng một request, không retry. Người dùng xác nhận thư mới vào Inbox và hiển thị đúng dấu.
 
 ## Email tài khoản
 
 - Link đặt lại mật khẩu có hiệu lực 30 phút; link xác minh có hiệu lực 24 giờ. MongoDB chỉ giữ hash token và TTL index hỗ trợ dọn token hết hạn.
-- `EMAIL_COOLDOWN_SECONDS` mặc định 60. `SMTP_TIMEOUT_MS` là timeout hữu hạn; không tắt TLS hoặc kiểm tra chứng chỉ để xử lý lỗi gửi mail.
-- Development/test có thể tiêm email sender capture trong tiến trình kiểm thử. Production phải cấu hình `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` và cặp `SMTP_USER`/`SMTP_PASSWORD` nếu nhà cung cấp yêu cầu xác thực.
-- Sau khi điền cấu hình, mở frontend, dùng một tài khoản thử để gửi xác minh và đặt lại mật khẩu. Kết quả mong đợi: nhận cả nội dung text/HTML, link trỏ đúng HTTPS/domain, không lộ mật khẩu/token trong log. Nếu lỗi, kiểm tra mã lỗi SMTP đã che thông tin; không gửi secret hoặc toàn bộ email link khi nhờ hỗ trợ.
+- `EMAIL_PROVIDER` chọn rõ `disabled`, `smtp` hoặc `gmail_api`; không có fallback tự động. `EMAIL_COOLDOWN_SECONDS` mặc định 60.
+- SMTP/Mailpit vẫn dùng cho local với timeout hữu hạn và TLS đúng môi trường. Gmail API dùng OAuth2 để refresh access token rồi gọi `users.messages.send` qua HTTPS; MIME có text/HTML, UTF-8 và From cố định.
+- Gmail API không retry tự động. Timeout/lỗi mạng sau khi request bắt đầu có thể có kết quả chưa rõ, vì vậy không tự gửi lại để tránh thư trùng. Google trả thành công chỉ nghĩa là API chấp nhận request, không chứng minh email đã vào inbox.
+- Log chỉ ghi mã an toàn: `GMAIL_INVALID_GRANT`, `GMAIL_AUTH`, `GMAIL_PERMISSION_DENIED`, `GMAIL_QUOTA`, `GMAIL_NETWORK`, `GMAIL_SERVER`, `GMAIL_TIMEOUT` hoặc `GMAIL_UNKNOWN`; không ghi response OAuth thô hay token.
+
+### Gmail API và OAuth Desktop
+
+- Công cụ `npm run gmail:authorize` dùng callback loopback `127.0.0.1`, state, PKCE S256, `access_type=offline` và chỉ scope `https://www.googleapis.com/auth/gmail.send`.
+- File OAuth client đầu vào và authorized-user đầu ra phải ở ngoài repo. Công cụ không ghi đè output có sẵn; nếu không có refresh token thì không lưu file mới.
+- External app ở trạng thái Testing có refresh token giới hạn khoảng 7 ngày với scope Gmail. Khi token hết hạn hoặc bị thu hồi, cấp quyền lại; không thay đổi Branding/publishing status bằng source code.
+- Render dùng `GMAIL_AUTHORIZED_USER_FILE` qua Secret File hoặc ba environment secret trực tiếp. `GMAIL_SENDER_EMAIL`, `FRONTEND_BASE_URL` và `FRONTEND_ORIGIN` phải khớp môi trường; production phải dùng HTTPS.
+- Tài liệu chính thức: [OAuth Desktop/loopback và PKCE](https://developers.google.com/identity/protocols/oauth2/native-app), [Gmail API gửi MIME](https://developers.google.com/workspace/gmail/api/guides/sending), [thời hạn refresh token ở Testing](https://developers.google.com/identity/protocols/oauth2) và [mã lỗi Gmail API](https://developers.google.com/workspace/gmail/api/guides/handle-errors).
+
+Nghiệm thu Gmail thật ngày 13/10/2026 dùng backend `127.0.0.1:4016`, frontend `127.0.0.1:5186`, `daytrail_test`, `daytrail-media-test` và chỉ provider `gmail_api`. Người dùng xác nhận đăng ký/xác minh email, quên/đặt lại mật khẩu, đổi mật khẩu, đăng nhập lại và liên kết dùng một lần đều hoạt động. Cleanup đối chiếu đúng user ID đã ghi nhận: xóa 1 user, 1 bản ghi liên quan, 0 object; kiểm tra sau dọn còn 0 user, 0 bản ghi và 0 object. Hai tiến trình nghiệm thu, state, record và log đã được dọn; script tái sử dụng cùng file OAuth ngoài repo được giữ nguyên. Không có thư Gmail nào bị truy cập hoặc xóa bởi cleanup.
 
 ## Giới hạn công việc hiện tại
 

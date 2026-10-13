@@ -11,6 +11,16 @@ export type EmailSender = {
   send(message: EmailMessage): Promise<void>
 }
 
+export type EmailFailureCode =
+  | 'GMAIL_AUTH'
+  | 'GMAIL_INVALID_GRANT'
+  | 'GMAIL_NETWORK'
+  | 'GMAIL_PERMISSION_DENIED'
+  | 'GMAIL_QUOTA'
+  | 'GMAIL_SERVER'
+  | 'GMAIL_TIMEOUT'
+  | 'GMAIL_UNKNOWN'
+
 export type SmtpConfig = {
   from: string
   host: string
@@ -24,6 +34,14 @@ export type SmtpConfig = {
 
 export class EmailUnavailableError extends Error {
   override name = 'EmailUnavailableError'
+}
+
+export class EmailDeliveryError extends Error {
+  override name = 'EmailDeliveryError'
+
+  constructor(readonly code: EmailFailureCode) {
+    super('Email delivery provider rejected or could not confirm the request')
+  }
 }
 
 export function createUnavailableEmailSender(): EmailSender {
@@ -54,6 +72,7 @@ export function createSmtpEmailSender(config: SmtpConfig): EmailSender {
 
 export function safeEmailFailureCode(error: unknown) {
   if (error instanceof EmailUnavailableError) return 'NOT_CONFIGURED'
+  if (error instanceof EmailDeliveryError) return error.code
   if (!error || typeof error !== 'object') return 'UNKNOWN'
   if ('code' in error && typeof error.code === 'string' && /^[A-Z0-9_]{1,40}$/.test(error.code)) return error.code
   return error instanceof Error ? error.name : 'UNKNOWN'

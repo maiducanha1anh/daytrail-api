@@ -7,6 +7,7 @@ import { startMediaCleanupWorker } from './media/service.js'
 import { createR2MediaStorage } from './media/storage.js'
 import { startProfileCleanupWorker } from './profile/service.js'
 import { createSmtpEmailSender, createUnavailableEmailSender } from './email/sender.js'
+import { createGmailApiEmailSender } from './email/gmailApi.js'
 
 let server: Server | undefined
 let shuttingDown = false
@@ -43,7 +44,11 @@ async function start() {
   })
   await ensureDatabaseIndexes()
   const mediaStorage = config.mediaStorage ? createR2MediaStorage(config.mediaStorage) : undefined
-  const emailSender = config.emailSender ? createSmtpEmailSender(config.emailSender) : createUnavailableEmailSender()
+  const emailSender = config.emailProvider.provider === 'gmail_api'
+    ? createGmailApiEmailSender(config.emailProvider.gmail)
+    : config.emailProvider.provider === 'smtp'
+      ? createSmtpEmailSender(config.emailProvider.smtp)
+      : createUnavailableEmailSender()
   const app = createApp({
     authRateLimitMax: config.authRateLimitMax,
     authRateLimitWindowMs: config.authRateLimitWindowMs,
