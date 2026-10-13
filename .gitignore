@@ -1,5 +1,7 @@
 node_modules/
 dist/
+render-frontend-dist/
+.render-build/
 .env
 .env.*
 !.env.example

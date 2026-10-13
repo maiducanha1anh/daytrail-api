@@ -131,6 +131,16 @@ Checklist trung tâm nằm tại `C:\daytrail-web\docs\RELEASE_CHECKLIST.md`. Tr
 
 Chưa có quyết định về phạm vi thùng rác, thời gian giữ, RPO/RTO, hạ tầng/domain hoặc proxy production. Không tự deploy hoặc đặt `NODE_ENV=production` khi chưa có HTTPS, `FRONTEND_ORIGIN` chính xác và cơ chế quản lý secret. Không dùng database/bucket development để diễn tập restore.
 
+### Bản thử trên Render
+
+- Dùng một Web Service từ repo backend. Build bằng `npm ci --include=dev --no-audit --no-fund && npm run build:render && npm prune --omit=dev --no-audit --no-fund`, start `npm start` và health path `/api/ready`.
+- Backend dùng `PORT` của Render, bind `0.0.0.0`; `NODE_ENV=production` bật cookie Secure và tin cậy đúng một lớp proxy. Không tự đặt `PORT` trên dashboard.
+- Frontend được fetch theo full SHA trong `render.frontend-lock.mjs`, build rồi phục vụ từ `render-frontend-dist`. Giao diện và `/api` cùng hostname `onrender.com`, không cần custom domain; cookie, CORS và CSRF giữ nguyên rào chắn hiện có.
+- `HTTP_REQUEST_TIMEOUT_MS` mặc định 30 giây ở local; bản thử có upload 8 MiB nên khuyến nghị 120 giây. Không tăng timeout MongoDB/R2 để che lỗi kết nối.
+- Không đưa `MONGODB_TEST_URI` hoặc `R2_TEST_*` lên Render. Dùng Atlas database `daytrail` và bucket R2 private riêng cho preview; allowlist đúng các CIDR outbound hiển thị trong dịch vụ Render.
+- Free Web Service phục vụ cả HTML và API nên cold start ảnh hưởng toàn bộ website.
+- Cấu hình đầy đủ và thứ tự triển khai nằm tại `C:\daytrail-web\docs\RENDER_PREVIEW.md`. Chưa có dịch vụ hoặc URL online nào được tạo trong lượt chuẩn bị này.
+
 ## Lưu trữ ảnh riêng tư 4C.1
 
 Backend dùng Cloudflare R2 bucket riêng tư: MongoDB chỉ giữ metadata và hàng đợi cleanup; backend xác thực session/chủ sở hữu rồi stream ảnh. Không dùng object public, base64 trong MongoDB, local disk khi deploy hoặc biến `VITE_*`.

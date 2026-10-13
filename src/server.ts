@@ -1,4 +1,7 @@
 import type { Server } from 'node:http'
+import { constants } from 'node:fs'
+import { access } from 'node:fs/promises'
+import { join } from 'node:path'
 import { createApp } from './app.js'
 import { ConfigurationError, loadConfig } from './config/env.js'
 import { connectDatabase, DatabaseConnectionError, disconnectDatabase, pingDatabase } from './database/mongoose.js'
@@ -36,6 +39,11 @@ async function shutdown(signal: NodeJS.Signals) {
 
 async function start() {
   const config = loadConfig()
+  if (config.frontendDistDir) {
+    await access(join(config.frontendDistDir, 'index.html'), constants.R_OK).catch(() => {
+      throw new ConfigurationError('Frontend production build is missing or unreadable')
+    })
+  }
   await connectDatabase({
     connectTimeoutMs: config.mongodbConnectTimeoutMs,
     databaseName: config.databaseName,
@@ -56,15 +64,17 @@ async function start() {
     emailCooldownMs: config.emailCooldownMs,
     emailSender,
     frontendBaseUrl: config.frontendBaseUrl,
+    frontendDistDir: config.frontendDistDir,
     frontendOrigin: config.frontendOrigin,
     isDatabaseReady: () => pingDatabase(config.mongodbPingTimeoutMs),
     mediaKeyPrefix: config.mediaStorage?.keyPrefix,
     mediaStorage,
     mediaUploadConcurrency: config.mediaUploadConcurrency,
     sessionTtlMs: config.sessionTtlMs,
+    trustProxy: config.trustProxy,
   })
-  server = app.listen(config.port, () => console.log(`DayTrail API listening on http://localhost:${config.port}`))
-  server.requestTimeout = 30_000
+  server = app.listen(config.port, '0.0.0.0', () => console.log(`DayTrail API listening on 0.0.0.0:${config.port}`))
+  server.requestTimeout = config.httpRequestTimeoutMs
   server.headersTimeout = 35_000
   if (mediaStorage) {
     stopMediaCleanupWorker = startMediaCleanupWorker(mediaStorage)

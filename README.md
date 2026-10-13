@@ -37,6 +37,7 @@ MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-host>/daytrail?retryWri
 MONGODB_TEST_URI=mongodb+srv://<test-username>:<test-password>@<cluster-host>/daytrail_test?retryWrites=true&w=majority
 MONGODB_CONNECT_TIMEOUT_MS=10000
 MONGODB_PING_TIMEOUT_MS=3000
+HTTP_REQUEST_TIMEOUT_MS=30000
 SESSION_TTL_DAYS=7
 AUTH_RATE_LIMIT_WINDOW_MS=900000
 AUTH_RATE_LIMIT_MAX=10
@@ -118,10 +119,10 @@ Kết quả mong đợi:
 
 - Ba lệnh đầu kết thúc với exit code 0.
 - `db:verify` xác nhận ping và ghi/đọc/xóa một document tạm trong `daytrail`.
-- `npm test` gồm 77 test: 69 test trước đó và 8 test provider email/Gmail API. Codex đã chạy đủ **77/77 PASS** trên source hiện tại. Suite email giải mã MIME rồi so sánh nguyên văn subject, text và HTML tiếng Việt của cả thư xác minh lẫn đặt lại mật khẩu; các test tự động vẫn dùng mock HTTPS và không gửi email Internet.
+- `npm test` gồm 81 test: 77 test nghiệp vụ/provider trước đó và 4 test phục vụ frontend production. Codex đã chạy đủ **81/81 PASS** trên source hiện tại. Suite email vẫn dùng mock HTTPS, còn suite media dùng MongoDB/R2 test thật; không gửi email Internet.
 - Ngày 12/10/2026, người dùng tự thử và duyệt đăng ký/xác minh email, quên/đặt lại mật khẩu và đổi mật khẩu/đăng nhập lại bằng backend thật, `daytrail_test` và Mailpit SMTP cục bộ. Đây là kiểm thử SMTP cục bộ; gửi email Internet và production chưa được kiểm chứng.
 - Ngày 13/10/2026, Gmail API đã chấp nhận đúng một email kiểm tra UTF-8 gửi bằng cấu hình tiến trình riêng. Người dùng xác nhận thư vào Inbox và hiển thị đúng tiếng Việt; sau đó đăng ký/xác minh email, quên/đặt lại mật khẩu, đổi mật khẩu, đăng nhập lại và từ chối tái sử dụng liên kết đều đạt trên môi trường local dùng Gmail thật. Đây chưa phải kiểm chứng production; OAuth vẫn ở trạng thái External / Testing.
-- `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ `http://localhost:4000`.
+- `npm run dev` chỉ mở cổng sau khi MongoDB kết nối và ping thành công; log báo database `daytrail` và địa chỉ lắng nghe `0.0.0.0:4000`. Trình duyệt local vẫn gọi `http://localhost:4000`.
 
 Kiểm tra API từ một PowerShell khác:
 
@@ -131,6 +132,20 @@ Invoke-RestMethod http://localhost:4000/api/ready
 ```
 
 `/api/health` phải trả `status=ok` và chỉ xác nhận tiến trình API còn sống; `/api/ready` phải trả `status=ready` mới xác nhận MongoDB hoạt động. Nếu lỗi, xem [hướng dẫn vận hành](docs/OPERATIONS.md) và không đưa URI hoặc mật khẩu vào log chia sẻ.
+
+## Chuẩn bị chạy trên Render
+
+Source pin Node.js `22.23.3` bằng `.node-version`. Render Web Service dùng:
+
+```text
+Build Command: npm ci --include=dev --no-audit --no-fund && npm run build:render && npm prune --omit=dev --no-audit --no-fund
+Start Command: npm start
+Health Check Path: /api/ready
+```
+
+Render chỉ liên kết repo backend. `npm run build:render` fetch đúng full SHA frontend trong `render.frontend-lock.mjs`, build bằng lockfile, đặt output vào `render-frontend-dist` và xóa source tạm. Express phục vụ giao diện cùng API trên một origin `https://<ten-dich-vu>.onrender.com`; không cần Static Site hoặc custom domain.
+
+Backend đọc `PORT` do Render cấp, bind `0.0.0.0` và chỉ bật `trust proxy = 1` khi `NODE_ENV=production`. Có thể đặt `HTTP_REQUEST_TIMEOUT_MS=120000` cho bản thử để upload tối đa 8 MiB không bị timeout sớm trên mạng chậm; giới hạn file và timeout R2 vẫn được giữ riêng. Bảng biến, thứ tự tạo dịch vụ, dữ liệu preview và backup/restore nằm trong `C:\daytrail-web\docs\RENDER_PREVIEW.md`. Tài liệu này chưa phải bằng chứng deploy thành công.
 
 ## Thử API xác thực
 

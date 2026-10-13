@@ -18,16 +18,19 @@ type AppDependencies = {
   emailCooldownMs?: number
   emailSender?: EmailSender
   frontendBaseUrl?: string
+  frontendDistDir?: string
   frontendOrigin: string
   isDatabaseReady: () => Promise<boolean>
   mediaKeyPrefix?: string
   mediaStorage?: MediaStorage
   mediaUploadConcurrency?: number
   sessionTtlMs: number
+  trustProxy?: boolean | number
 }
 
-export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecure, emailCooldownMs = 60_000, emailSender = createUnavailableEmailSender(), frontendOrigin, frontendBaseUrl = frontendOrigin, isDatabaseReady, mediaKeyPrefix, mediaStorage, mediaUploadConcurrency = 2, sessionTtlMs }: AppDependencies) {
+export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecure, emailCooldownMs = 60_000, emailSender = createUnavailableEmailSender(), frontendDistDir, frontendOrigin, frontendBaseUrl = frontendOrigin, isDatabaseReady, mediaKeyPrefix, mediaStorage, mediaUploadConcurrency = 2, sessionTtlMs, trustProxy = false }: AppDependencies) {
   const app = express()
+  if (trustProxy) app.set('trust proxy', trustProxy)
   app.disable('x-powered-by')
   app.use(cors({
     credentials: true,
@@ -57,6 +60,18 @@ export function createApp({ authRateLimitMax, authRateLimitWindowMs, cookieSecur
   app.use('/api/journey', createJourneyRouter(frontendOrigin))
   app.use('/api/tasks', createTaskRouter({ frontendOrigin, mediaStorage }))
   app.use('/api/journals', createJournalRouter({ frontendOrigin, mediaStorage }))
+  app.use('/api', (_request, response) => response.status(404).json({
+    code: 'API_NOT_FOUND',
+    error: 'API không tồn tại.',
+  }))
+  if (frontendDistDir) {
+    app.use(express.static(frontendDistDir, {
+      dotfiles: 'deny',
+      fallthrough: true,
+      index: 'index.html',
+      redirect: false,
+    }))
+  }
   app.use((error: unknown, _request: express.Request, response: express.Response, next: express.NextFunction) => {
     void next
     if (error instanceof SyntaxError && 'status' in error && error.status === 400) {

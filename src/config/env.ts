@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { GmailApiConfig } from '../email/gmailApi.js'
 import type { SmtpConfig } from '../email/sender.js'
 
@@ -227,7 +228,11 @@ export function loadConfig() {
     emailCooldownMs: positiveInteger('EMAIL_COOLDOWN_SECONDS', 60) * 1_000,
     emailProvider: loadEmailProviderConfig(nodeEnv),
     frontendBaseUrl: frontendBaseUrl(nodeEnv),
+    frontendDistDir: nodeEnv === 'production'
+      ? resolve(process.env.FRONTEND_DIST_DIR?.trim() || 'render-frontend-dist')
+      : undefined,
     frontendOrigin: frontendOrigin(),
+    httpRequestTimeoutMs: positiveInteger('HTTP_REQUEST_TIMEOUT_MS', 30_000),
     mongodbConnectTimeoutMs: positiveInteger('MONGODB_CONNECT_TIMEOUT_MS', 10_000),
     mongodbPingTimeoutMs: positiveInteger('MONGODB_PING_TIMEOUT_MS', 3_000),
     mongodbUri: mongodbUri('MONGODB_URI', DATABASE_NAME),
@@ -236,6 +241,7 @@ export function loadConfig() {
     nodeEnv,
     port,
     sessionTtlMs: positiveInteger('SESSION_TTL_DAYS', 7) * DAY_MS,
+    trustProxy: nodeEnv === 'production' ? 1 : false,
   })
 }
 
